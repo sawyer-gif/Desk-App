@@ -1,5 +1,4 @@
-import { SignInButton, SignedIn, SignedOut } from "@clerk/clerk-react";
-
+import { SignInButton, SignedOut, SignedIn } from "@clerk/clerk-react";
 
 import React from 'react';
 
