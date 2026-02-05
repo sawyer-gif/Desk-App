@@ -12,18 +12,17 @@ export const LoginPage: React.FC = () => {
   return (
     <div className="relative w-screen h-screen overflow-hidden flex items-center justify-center bg-[#08080A]">
       {/* Background Video - Dark Abstract Motion with Purple Accents */}
-      <video
-        autoPlay
-        muted
-        loop
-        playsInline
-        className="absolute inset-0 w-full h-full object-cover opacity-70"
-        poster="https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&q=80&w=2000"
-      >
-        {/* Replace the URL below with your specific 'Desk_Intake_Animation.mp4' file path if hosted locally */}
-        <source src="/video/login-bg.mp4" type="video/mp4" 
- />
-      </video>
+<video
+  autoPlay
+  muted
+  loop
+  playsInline
+  className="absolute inset-0 w-full h-full object-cover opacity-70"
+  poster="https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&q=80&w=2000"
+>
+  <source src="/video/login-bg.mp4" type="video/mp4" />
+</video>
+
 
       {/* Cinematic Vignette & Deep Purple Gradient Overlay */}
       <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-transparent to-black/90 pointer-events-none" />
