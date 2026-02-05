@@ -1,3 +1,6 @@
 .env.local
 dist
 node_modules
+.env.local
+dist
+node_modules
