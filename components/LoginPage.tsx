@@ -21,7 +21,8 @@ export const LoginPage: React.FC = () => {
         poster="https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&q=80&w=2000"
       >
         {/* Replace the URL below with your specific 'Desk_Intake_Animation.mp4' file path if hosted locally */}
-        <source src="https://assets.mixkit.co/videos/preview/mixkit-floating-white-light-particles-on-a-purple-background-34538-large.mp4" type="video/mp4" />
+        <source sr="/video/login-bg.mp4" type="video/mp4" />
+ />
       </video>
 
       {/* Cinematic Vignette & Deep Purple Gradient Overlay */}
