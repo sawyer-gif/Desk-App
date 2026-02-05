@@ -1,13 +1,10 @@
+import { SignInButton, SignedIn, SignedOut } from "@clerk/clerk-react";
 
 import React from 'react';
-import { useAppState } from '../store';
 
 export const LoginPage: React.FC = () => {
-  const { dispatch } = useAppState();
 
-  const handleLogin = () => {
-    dispatch({ type: 'LOGIN' });
-  };
+
 
   return (
     <div className="relative w-screen h-screen overflow-hidden flex items-center justify-center bg-[#08080A]">
@@ -46,18 +43,25 @@ export const LoginPage: React.FC = () => {
         <div className="w-full bg-white/[0.06] backdrop-blur-[40px] border border-white/10 rounded-[40px] p-10 shadow-[0_20px_50px_rgba(0,0,0,0.3)] animate-in fade-in zoom-in-95 duration-700">
           
           {/* TODO: Integrate Clerk Auth here */}
-          <div className="space-y-4">
-            <button
-              onClick={handleLogin}
-              className="w-full bg-white text-black py-4 px-8 rounded-full font-bold flex items-center justify-center gap-3 hover:bg-zinc-100 active:scale-[0.98] transition-all shadow-[0_8px_30px_rgb(0,0,0,0.12)]"
-            >
-              <img 
-                src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png" 
-                className="w-5 h-5" 
-                alt="Google" 
-              />
-              <span className="text-[15px] tracking-tight">Continue with Google</span>
-            </button>
+       <div className="space-y-4">
+  <SignOut>
+    <SignInButton mode="modal">
+      <button
+        className="w-full bg-white text-black py-4 px-8 rounded-full font-bold flex items-center justify-center gap-3 hover:bg-zinc-100 active:scale-[0.98] transition-all shadow-[0_8px_30px_rgb(0,0,0,0.12)]"
+      >
+        <img
+          src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png"
+          className="w-5 h-5"
+          alt="Google"
+        />
+        <span className="text-[15px] tracking-tight">
+          Continue with Google
+        </span>
+      </button>
+    </SignInButton>
+  </SignOut>
+</div>
+
             
             <button
               disabled
