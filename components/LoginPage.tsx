@@ -44,7 +44,7 @@ export const LoginPage: React.FC = () => {
           
           {/* TODO: Integrate Clerk Auth here */}
        <div className="space-y-4">
-  <SignOut>
+ 
     <SignInButton mode="modal">
       <button
         className="w-full bg-white text-black py-4 px-8 rounded-full font-bold flex items-center justify-center gap-3 hover:bg-zinc-100 active:scale-[0.98] transition-all shadow-[0_8px_30px_rgb(0,0,0,0.12)]"
@@ -59,7 +59,7 @@ export const LoginPage: React.FC = () => {
         </span>
       </button>
     </SignInButton>
-  </SignOut>
+
 </div>
 
             
