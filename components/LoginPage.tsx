@@ -1,5 +1,6 @@
 import { SignInButton, SignedIn, SignedOut } from "@clerk/clerk-react";
 
+
 import React from 'react';
 
 export const LoginPage: React.FC = () => {
@@ -44,22 +45,28 @@ export const LoginPage: React.FC = () => {
           
           {/* TODO: Integrate Clerk Auth here */}
        <div className="space-y-4">
- 
-    <SignInButton mode="modal">
-      <button
-        className="w-full bg-white text-black py-4 px-8 rounded-full font-bold flex items-center justify-center gap-3 hover:bg-zinc-100 active:scale-[0.98] transition-all shadow-[0_8px_30px_rgb(0,0,0,0.12)]"
-      >
-        <img
-          src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png"
-          className="w-5 h-5"
-          alt="Google"
-        />
-        <span className="text-[15px] tracking-tight">
-          Continue with Google
-        </span>
-      </button>
-    </SignInButton>
+ <SignedOut>
+  <SignInButton mode="modal">
+    <button
+      className="w-full bg-white text-black py-4 px-8 rounded-full font-bold flex items-center justify-center gap-3 hover:bg-zinc-100 active:scale-[0.98] transition-all shadow-[0_8px_30px_rgb(0,0,0,0.12)]"
+    >
+      <img
+        src="https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png"
+        className="w-5 h-5"
+        alt="Google"
+      />
+      <span className="text-[15px] tracking-tight">Continue with Google</span>
+    </button>
+  </SignInButton>
+</SignedOut>
 
+<SignedIn>
+  <div className="w-full bg-white/10 text-white py-4 px-8 rounded-full text-center">
+    You’re signed in — go to the dashboard.
+  </div>
+</SignedIn>
+
+ 
 </div>
 
             
@@ -86,6 +93,6 @@ export const LoginPage: React.FC = () => {
           <a href="#" className="hover:text-white/50 transition-colors">Support</a>
         </div>
       </div>
-    </div>
+    
   );
 };
