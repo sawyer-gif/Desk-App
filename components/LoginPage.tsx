@@ -21,7 +21,7 @@ export const LoginPage: React.FC = () => {
         poster="https://images.unsplash.com/photo-1550684848-fac1c5b4e853?auto=format&fit=crop&q=80&w=2000"
       >
         {/* Replace the URL below with your specific 'Desk_Intake_Animation.mp4' file path if hosted locally */}
-        <source sr="/video/login-bg.mp4" type="video/mp4" />
+        <source src="/video/login-bg.mp4" type="video/mp4" 
  />
       </video>
 
