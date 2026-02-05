@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MR AI Inbox Agent</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              desk: {
+                bg: {
+                  light: '#F7F6F3',
+                  dark: '#121212'
+                },
+                surface: {
+                  light: '#FFFFFF',
+                  dark: '#1C1C1E'
+                },
+                text: {
+                  primary: {
+                    light: '#1C1C1E',
+                    dark: '#F2F2F7'
+                  },
+                  secondary: {
+                    light: '#6E6E73',
+                    dark: '#9A9AA0'
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      body {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background-color: #F7F6F3;
+        color: #1C1C1E;
+        -webkit-font-smoothing: antialiased;
+        overflow-x: hidden;
+        transition: background-color 0.3s ease, color 0.3s ease;
+      }
+      .dark body {
+        background-color: #121212;
+        color: #F2F2F7;
+      }
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #D1D1D6;
+        border-radius: 10px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #A1A1A6;
+      }
+      .glass {
+        background: rgba(255, 255, 255, 0.7);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+      }
+      .dark .glass {
+        background: rgba(28, 28, 30, 0.8);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      .apple-shadow {
+        box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.02), 0 2px 8px -1px rgba(0, 0, 0, 0.01);
+      }
+      .apple-card {
+        background: #FFFFFF;
+        border: 1px solid rgba(0, 0, 0, 0.04);
+        border-radius: 20px;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      .dark .apple-card {
+        background: #1C1C1E;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      .apple-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.05);
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.4",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "lucide-react": "https://esm.sh/lucide-react@^0.563.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
