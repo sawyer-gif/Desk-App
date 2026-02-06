@@ -16,9 +16,10 @@ export const Header: React.FC = () => {
     if (!token) throw new Error("No Clerk session token found");
 
     // Call your Vercel API route that reads Gmail
-    const res = await fetch("/api/google/gmail-threads", {
+    const res = await fetch("/api/google/gmail-threads?ts=" + Date.now(), {
   method: "GET",
   headers: { Authorization: `Bearer ${token}` },
+  cache: "no-store",
 });
 
 
@@ -52,11 +53,13 @@ const connectGoogle = async () => {
   try {
     const token = await getToken();
 
-    const res = await fetch("/api/google-start", {
+    const res = await fetch("/api/google/google-start?ts=" + Date.now(), {
+
       method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,
       },
+      cache: "no-store",
     });
 
     if (!res.ok) {
