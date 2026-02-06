@@ -58,7 +58,15 @@ function reducer(state: AppState, action: Action): AppState {
       localStorage.removeItem('desk-auth');
       return { ...state, isAuthenticated: false };
     case 'SET_THREADS':
-      return { ...state, threads: action.payload };
+  return { ...state, threads: action.payload };
+
+case "SET_LAST_SYNC_TIME":
+  return {
+    ...state,
+    lastSyncTime: action.payload,
+  };
+
+    
     case 'NAVIGATE':
       return { ...state, currentView: action.payload, selectedThreadId: null };
     case 'MOVE_THREAD': {

@@ -8,11 +8,42 @@ export const Header: React.FC = () => {
    const { getToken } = useAuth();
 
   const handleSync = async () => {
-    dispatch({ type: 'SET_SYNCING', payload: true });
-    await new Promise(resolve => setTimeout(resolve, 800));
-    dispatch({ type: 'PERFORM_SYNC' });
-    dispatch({ type: 'SET_SYNCING', payload: false });
-  };
+  try {
+    dispatch({ type: "SET_SYNCING", payload: true });
+
+    // Get your Clerk session token (frontend)
+    const token = await getToken();
+    if (!token) throw new Error("No Clerk session token found");
+
+    // Call your Vercel API route that reads Gmail
+    const res = await fetch("/api/google/gmail-threads", {
+  method: "GET",
+  headers: { Authorization: `Bearer ${token}` },
+});
+
+
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(txt);
+    }
+
+    const data = await res.json();
+
+    // Update app state with the returned threads/messages
+    dispatch({ type: "SET_THREADS", payload: data.threads ?? [] });
+    dispatch({
+  type: "SET_LAST_SYNC_TIME",
+  payload: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+});
+
+  } catch (err) {
+    console.error(err);
+    alert("Sync failed — check console/logs");
+  } finally {
+    dispatch({ type: "SET_SYNCING", payload: false });
+  }
+};
+
 
   const handleLogout = () => {
     dispatch({ type: 'LOGOUT' });
@@ -112,12 +143,16 @@ const connectGoogle = async () => {
         <button
           onClick={connectGoogle}
           className="px-3 py-1.5 text-[12px] font-bold rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-all"
-        >
+      >
           Connect Google
         </button>
 
         <button
-          onClick={handleSync}
+          onClick={() => {
+          alert("SYNC CLICKED");
+          handleSync();
+      }}
+
           disabled={state.isSyncing}
           className="bg-desk-text-primary-light dark:bg-desk-text-primary-dark dark:text-desk-surface-dark text-desk-surface-light px-4 py-2 rounded-xl text-[12px] font-bold hover:opacity-90 active:scale-95 transition-all flex items-center gap-2 disabled:bg-desk-text-secondary-light/30"
         >

@@ -93,4 +93,8 @@ export type Action =
   | { type: 'TOGGLE_DARK_MODE' }
   | { type: 'LOGIN' }
   | { type: 'LOGOUT' }
-  | { type: 'TOGGLE_QUESTION_ANSWERED'; payload: { threadId: string; messageId: string } };
+  | { type: 'TOGGLE_QUESTION_ANSWERED'; payload: { threadId: string; messageId: string } }
+  | { type: "SET_LAST_SYNC_TIME"; payload: string };
+
+
+
