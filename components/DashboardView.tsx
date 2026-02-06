@@ -3,9 +3,13 @@ import { useAppState } from '../store';
 import { Bucket, Thread } from '../types';
 import { ArrowUpRight, AlertCircle, Clock, CheckCircle2 } from 'lucide-react';
 import { UnassignedSection } from './UnassignedSection';
+import { useAuth } from "@clerk/clerk-react";
+
 
 export const DashboardView: React.FC = () => {
   const { state, dispatch } = useAppState();
+  const { getToken } = useAuth();
+
 
   const getMetrics = (bucketThreads: Thread[]) => {
     const awaiting = bucketThreads.filter(t => t.awaitingSawyerReply);
@@ -27,7 +31,7 @@ export const DashboardView: React.FC = () => {
     { name: Bucket.INTERNAL, icon: 'bg-purple-500' },
     { name: Bucket.CLEARED, icon: 'bg-desk-text-secondary-light/50' },
   ];
-
+      
   return (
     <div className="max-w-[1100px] w-full mx-auto px-8 py-12 space-y-16 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
