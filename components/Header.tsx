@@ -1,9 +1,11 @@
 import React from 'react';
+import { useAuth } from "@clerk/clerk-react";
 import { useAppState } from '../store';
 import { Search, RefreshCw, ChevronLeft, Moon, Sun, LogOut } from 'lucide-react';
 
 export const Header: React.FC = () => {
   const { state, dispatch } = useAppState();
+   const { getToken } = useAuth();
 
   const handleSync = async () => {
     dispatch({ type: 'SET_SYNCING', payload: true });
@@ -15,6 +17,31 @@ export const Header: React.FC = () => {
   const handleLogout = () => {
     dispatch({ type: 'LOGOUT' });
   };
+const connectGoogle = async () => {
+  try {
+    const token = await getToken();
+
+    const res = await fetch("/api/google-start", {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!res.ok) {
+      const txt = await res.text();
+      alert("Google connect failed: " + txt);
+      return;
+    }
+
+    const data = await res.json();
+    window.location.href = data.url;
+
+  } catch (err) {
+    console.error(err);
+    alert("Google connect error");
+  }
+};
 
   const isDashboard = state.currentView.type === 'DASHBOARD';
 
@@ -82,6 +109,12 @@ export const Header: React.FC = () => {
         </button>
 
         <div className="w-px h-6 bg-black/5 dark:bg-white/5 mx-2" />
+        <button
+          onClick={connectGoogle}
+          className="px-3 py-1.5 text-[12px] font-bold rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-all"
+        >
+          Connect Google
+        </button>
 
         <button
           onClick={handleSync}
