@@ -23,6 +23,7 @@ export const Header: React.FC = () => {
 });
 
 
+
     if (!res.ok) {
       const txt = await res.text();
       throw new Error(txt);
@@ -30,12 +31,35 @@ export const Header: React.FC = () => {
 
     const data = await res.json();
 
-    // Update app state with the returned threads/messages
-    dispatch({ type: "SET_THREADS", payload: data.threads ?? [] });
-    dispatch({
-  type: "SET_LAST_SYNC_TIME",
-  payload: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+const normalizedThreads = (data.threads ?? []).map((t: any) => {
+  const ts = t.date ? new Date(t.date).getTime() : Date.now();
+
+ 
+
+  return {
+    id: t.id,
+    subject: t.subject ?? "(no subject)",
+    fromEmail: (t.from ?? "").match(/<([^>]+)>/)?.[1] || t.from || "",
+    fromName: (t.from ?? "").split("<")[0]?.trim() || t.from || "",
+    preview: t.snippet ?? "",
+    lastInboundAt: ts,
+    lastOutboundAt: 0,
+    messageCount: t.messageCount ?? 1,
+
+    // your app logic uses these a lot — set safe defaults:
+    bucket: "UNASSIGNED",
+    pinned: false,
+    awaitingSawyerReply: true,
+    followUpAt: null,
+    answeredQuestionIds: [],
+  };
 });
+
+dispatch({ type: "SET_THREADS", payload: normalizedThreads });
+dispatch({ type: "PERFORM_SYNC" }); // keeps your “bucket state” logic consistent
+dispatch({ type: "SET_LAST_SYNC_TIME", payload: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) });
+
+
 
   } catch (err) {
     console.error(err);

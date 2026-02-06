@@ -5,7 +5,7 @@ import { MOCK_THREADS } from './constants';
 
 const initialState: AppState = {
   isAuthenticated: localStorage.getItem('desk-auth') === 'true',
-  threads: MOCK_THREADS,
+  threads: [],
   routingRules: [],
   selectedThreadId: null,
   currentView: { type: 'DASHBOARD' },
