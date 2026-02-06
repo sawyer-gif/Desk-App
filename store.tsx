@@ -1,7 +1,6 @@
 
 import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react';
 import { AppState, Action, Bucket, Thread, RoutingRule } from './types';
-import { MOCK_THREADS } from './constants';
 
 const initialState: AppState = {
   isAuthenticated: localStorage.getItem('desk-auth') === 'true',
@@ -12,7 +11,7 @@ const initialState: AppState = {
   isSyncing: false,
   lastSyncTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
   searchQuery: '',
-  dateRange: '7 Days',
+  dateRange: '30 Days',
   isDraftModalOpen: false,
   expandedBuckets: new Set(),
   darkMode: localStorage.getItem('desk-dark-mode') === 'true',

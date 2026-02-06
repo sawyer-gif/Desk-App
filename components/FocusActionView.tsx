@@ -16,7 +16,7 @@ export const FocusActionView: React.FC = () => {
     setExpandedSections(next);
   };
 
-  const actionable = state.threads.filter(t => t.bucket !== 'Cleared' && t.bucket !== 'Unassigned');
+  const actionable = state.threads.filter(t => t.bucket !== 'Cleared');
 
   // Logic: 
   // 1. Do Now: (Overdue >= 4d OR Follow-up passed) AND Priority High

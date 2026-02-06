@@ -47,7 +47,7 @@ const normalizedThreads = (data.threads ?? []).map((t: any) => {
     messageCount: t.messageCount ?? 1,
 
     // your app logic uses these a lot — set safe defaults:
-    bucket: "UNASSIGNED",
+    bucket: (t.from ?? "").includes("@marioromano.com") ? "Internal" : "Sales",
     pinned: false,
     awaitingSawyerReply: true,
     followUpAt: null,
