@@ -1,9 +1,16 @@
-import { SignInButton, SignedOut, SignedIn } from "@clerk/clerk-react";
+import { SignInButton, SignedOut, SignedIn, useAuth } from "@clerk/clerk-react";
 
 import React from 'react';
 
-export const LoginPage: React.FC = () => {
 
+export const LoginPage: React.FC = () => {
+  const { isSignedIn } = useAuth();
+ 
+  <SignedIn>
+  <div className="w-full bg-white/10 text-white py-4 px-8 rounded-full text-center">
+    Signed in — loading your dashboard...
+  </div>
+</SignedIn>
 
 
   return (
@@ -61,11 +68,12 @@ export const LoginPage: React.FC = () => {
 
 <SignedIn>
   <div className="w-full bg-white/10 text-white py-4 px-8 rounded-full text-center">
-    You’re signed in — go to the dashboard.
+    Signed in — loading your dashboard…
   </div>
 </SignedIn>
 
- 
+
+
 </div>
 
             

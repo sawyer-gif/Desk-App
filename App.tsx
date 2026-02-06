@@ -7,13 +7,18 @@ import { DashboardView } from './components/DashboardView';
 import { BucketFocusedView } from './components/BucketFocusedView';
 import { FocusActionView } from './components/FocusActionView';
 import { LoginPage } from './components/LoginPage';
+import { useAuth } from "@clerk/clerk-react";
+
 
 const AppContent: React.FC = () => {
   const { state } = useAppState();
+  const { isSignedIn } = useAuth();
 
-  if (!state.isAuthenticated) {
-    return <LoginPage />;
-  }
+
+  if (!isSignedIn) {
+  return <LoginPage />;
+}
+
 
   const renderView = () => {
     switch (state.currentView.type) {
