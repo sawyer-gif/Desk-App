@@ -16,7 +16,10 @@ export const FocusActionView: React.FC = () => {
     setExpandedSections(next);
   };
 
-  const actionable = state.threads.filter(t => t.bucket !== 'Cleared');
+  // Guard: prevent blank-screen if threads is ever undefined/non-array
+const threads: Thread[] = Array.isArray((state as any).threads) ? ((state as any).threads as Thread[]) : [];
+const actionable = threads.filter(t => t.bucket !== 'Cleared');
+
 
   // Logic: 
   // 1. Do Now: (Overdue >= 4d OR Follow-up passed) AND Priority High
