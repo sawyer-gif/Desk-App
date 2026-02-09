@@ -43,8 +43,12 @@ export const DetailPanel: React.FC = () => {
   };
 
   const isUnassigned = thread.bucket === Bucket.UNASSIGNED;
-  const questions = detectSawyerQuestions(thread.messages);
-  const openQuestions = questions.filter(q => !(thread.answeredQuestionIds || []).includes(q.id));
+
+  // Guard: API can return missing/invalid arrays
+  const messages = Array.isArray((thread as any).messages) ? (thread as any).messages : [];
+  const questions = detectSawyerQuestions(messages) || [];
+  const answeredIds = Array.isArray((thread as any).answeredQuestionIds) ? (thread as any).answeredQuestionIds : [];
+  const openQuestions = questions.filter(q => !answeredIds.includes(q.id));
 
   return (
     <div className="w-[520px] border-l border-black/5 dark:border-white/5 bg-desk-surface-light dark:bg-desk-surface-dark h-full flex flex-col shadow-[-20px_0_40px_rgba(0,0,0,0.015)] animate-in slide-in-from-right duration-500 z-40 transition-colors duration-500">
