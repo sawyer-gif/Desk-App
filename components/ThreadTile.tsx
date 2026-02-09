@@ -29,8 +29,12 @@ export const ThreadTile: React.FC<ThreadTileProps> = ({ thread, compact = false 
   const priorityColor = thread.priority === 'High' ? 'bg-red-500' : thread.priority === 'Normal' ? 'bg-zinc-300 dark:bg-zinc-600' : 'bg-zinc-100 dark:bg-zinc-800';
 
   // Questions logic
-  const questions = detectSawyerQuestions(thread.messages);
-  const openQuestionsCount = questions.filter(q => !(thread.answeredQuestionIds || []).includes(q.id)).length;
+  // Guard: avoid crashes if API returns missing/invalid arrays
+const messages = Array.isArray((thread as any).messages) ? (thread as any).messages : [];
+const questions = (detectSawyerQuestions(messages) || []);
+const answeredIds = Array.isArray((thread as any).answeredQuestionIds) ? (thread as any).answeredQuestionIds : [];
+const openQuestionsCount = questions.filter(q => !answeredIds.includes(q.id)).length;
+
 
   return (
     <div 
