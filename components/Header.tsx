@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAuth } from "@clerk/clerk-react";
 import { useAppState } from '../store';
+import { Bucket, Thread, Message } from '../types';
 import { Search, RefreshCw, ChevronLeft, Moon, Sun, LogOut } from 'lucide-react';
 
 export const Header: React.FC = () => {
