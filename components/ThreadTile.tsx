@@ -1,5 +1,5 @@
-
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Thread, ProjectStatus } from '../types';
 import { useAppState } from '../store';
 import { Sparkles, AlertCircle, Bell, Pin, AtSign } from 'lucide-react';
@@ -19,6 +19,7 @@ const statusColorMap: Record<ProjectStatus, string> = {
 
 export const ThreadTile: React.FC<ThreadTileProps> = ({ thread, compact = false }) => {
   const { state, dispatch } = useAppState();
+  const navigate = useNavigate();
   const isSelected = state.selectedThreadId === thread.id;
 
   const receivedTime = formatReceivedTime(thread.lastInboundAt);
@@ -36,9 +37,17 @@ const answeredIds = Array.isArray((thread as any).answeredQuestionIds) ? (thread
 const openQuestionsCount = questions.filter(q => !answeredIds.includes(q.id)).length;
 
 
+  const handleNavigate = () => {
+    dispatch({ type: 'SELECT_THREAD', payload: thread.id });
+    navigate(`/threads/${thread.id}`);
+    if (import.meta.env?.DEV) {
+      console.log('[Desk] Navigating to thread detail', thread.id);
+    }
+  };
+
   return (
     <div 
-      onClick={() => dispatch({ type: 'SELECT_THREAD', payload: thread.id })}
+      onClick={handleNavigate}
       className={`group flex items-center justify-between p-3.5 rounded-2xl transition-all cursor-pointer border ${
         isSelected 
           ? 'bg-white dark:bg-zinc-800 border-black dark:border-zinc-600 shadow-sm ring-1 ring-black/5' 
