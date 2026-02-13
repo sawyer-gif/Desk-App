@@ -55,7 +55,9 @@ export function suggestBucketHeuristic(thread: Thread): { bucket: Bucket; reason
 /**
  * Detects messages requiring Sawyer's direct attention (Questions/Mentions).
  */
-export function detectSawyerQuestions(messages: Message[]): Message[] {
+export function detectSawyerQuestions(messages?: Message[] | null): Message[] {
+  const messageList: Message[] = Array.isArray(messages) ? messages : [];
+
   const patterns = [
     /sawyer/i,
     /can you/i,
@@ -68,11 +70,12 @@ export function detectSawyerQuestions(messages: Message[]): Message[] {
     /let me know/i
   ];
 
-  return messages.filter(m => {
+  return messageList.filter(m => {
     // Ignore Sawyer's own messages
-    if (m.sender.toLowerCase().includes('you') || m.senderEmail.toLowerCase().includes('sawyer')) return false;
+    if (!m || !m.sender) return false;
+    if (m.sender.toLowerCase().includes('you') || m.senderEmail?.toLowerCase().includes('sawyer')) return false;
 
-    const text = m.content.toLowerCase();
+    const text = (m.content || '').toLowerCase();
     const hasSawyer = /sawyer/i.test(text);
     const hasQuestionMark = text.includes('?');
     const matchesPattern = patterns.some(p => p.test(text));
