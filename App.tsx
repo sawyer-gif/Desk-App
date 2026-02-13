@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter, Route, Routes, useParams } from 'react-router-dom';
+import { Route, Routes, useParams } from 'react-router-dom';
 import { AppProvider, useAppState } from './store';
 import { Header } from './components/Header';
 import { DetailPanel } from './components/DetailPanel';
@@ -84,20 +84,18 @@ const NotFound: React.FC = () => {
   );
 };
 
-const RoutedApp: React.FC = () => (
-  <BrowserRouter>
-    <Routes>
-      <Route path="/" element={<AppContent />} />
-      <Route path="/threads/:threadId" element={<AppContent />} />
-      <Route path="*" element={<NotFound />} />
-    </Routes>
-  </BrowserRouter>
+const AppRoutes: React.FC = () => (
+  <Routes>
+    <Route path="/" element={<AppContent />} />
+    <Route path="/threads/:threadId" element={<AppContent />} />
+    <Route path="*" element={<NotFound />} />
+  </Routes>
 );
 
 const App: React.FC = () => {
   return (
     <AppProvider>
-      <RoutedApp />
+      <AppRoutes />
     </AppProvider>
   );
 };
