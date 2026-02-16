@@ -2,72 +2,96 @@ import React from 'react';
 import { useAuth } from "@clerk/clerk-react";
 import { useAppState } from '../store';
 import { Search, RefreshCw, ChevronLeft, Moon, Sun, LogOut } from 'lucide-react';
+import { Bucket, Priority, Thread } from '../types';
+
+const parseEmailAddress = (raw: string) => {
+  if (!raw) return { name: '', email: '' };
+  const match = raw.match(/<([^>]+)>/);
+  const email = match?.[1] || raw;
+  const name = raw.split('<')[0]?.trim() || email;
+  return { name, email };
+};
+
+const inferBucket = (email: string) => {
+  if (!email) return Bucket.SALES;
+  const normalized = email.toLowerCase();
+  if (normalized.includes('@marioromano.com')) return Bucket.INTERNAL;
+  if (normalized.includes('@mrwalls')) return Bucket.INTERNAL;
+  return Bucket.SALES;
+};
+
+const normalizeThreads = (threads: any[]): Thread[] => {
+  return (threads ?? []).map((t) => {
+    const { name, email } = parseEmailAddress(t.from ?? '');
+    const inboundDate = t.date ? new Date(t.date) : new Date();
+    const subject = t.subject ?? '(no subject)';
+
+    return {
+      id: t.id,
+      subject,
+      fromEmail: email,
+      fromName: name || email || 'Unknown sender',
+      project: subject,
+      actionPhrase: undefined,
+      contextTag: 'Lead',
+      snippet: t.snippet ?? '',
+      unread: true,
+      priority: 'Normal',
+      bucket: inferBucket(email),
+      messages: [],
+      suggestedDraft: undefined,
+      labels: [],
+      reason: undefined,
+      lastInboundAt: inboundDate.toISOString(),
+      lastOutboundAt: null,
+      awaitingSawyerReply: true,
+      daysUnresponded: 0,
+      followUpAt: null,
+      pinned: false,
+      hasAttachments: false,
+      answeredQuestionIds: [],
+    } as Thread;
+  });
+};
 
 export const Header: React.FC = () => {
   const { state, dispatch } = useAppState();
-   const { getToken } = useAuth();
+  const { getToken } = useAuth();
 
   const handleSync = async () => {
-  try {
-    dispatch({ type: "SET_SYNCING", payload: true });
+    try {
+      dispatch({ type: "SET_SYNCING", payload: true });
 
-    // Get your Clerk session token (frontend)
-    const token = await getToken();
-    if (!token) throw new Error("No Clerk session token found");
+      const token = await getToken();
+      if (!token) throw new Error("No Clerk session token found");
 
-    // Call your Vercel API route that reads Gmail
-    const res = await fetch("/api/google/gmail-threads?ts=" + Date.now(), {
-  method: "GET",
-  headers: { Authorization: `Bearer ${token}` },
-  cache: "no-store",
-});
+      const res = await fetch("/api/google/gmail-threads?ts=" + Date.now(), {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
 
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt);
+      }
 
+      const data = await res.json();
+      const normalizedThreads = normalizeThreads(data.threads ?? []);
 
-    if (!res.ok) {
-      const txt = await res.text();
-      throw new Error(txt);
+      dispatch({ type: "SET_THREADS", payload: normalizedThreads });
+      dispatch({ type: "PERFORM_SYNC" });
+      dispatch({
+        type: "SET_LAST_SYNC_TIME",
+        payload: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      });
+    } catch (err) {
+      console.error(err);
+      alert("Sync failed — check console/logs");
+    } finally {
+      dispatch({ type: "SET_SYNCING", payload: false });
     }
-
-    const data = await res.json();
-
-const normalizedThreads = (data.threads ?? []).map((t: any) => {
-  const ts = t.date ? new Date(t.date).getTime() : Date.now();
-
- 
-
-  return {
-    id: t.id,
-    subject: t.subject ?? "(no subject)",
-    fromEmail: (t.from ?? "").match(/<([^>]+)>/)?.[1] || t.from || "",
-    fromName: (t.from ?? "").split("<")[0]?.trim() || t.from || "",
-    preview: t.snippet ?? "",
-    lastInboundAt: ts,
-    lastOutboundAt: 0,
-    messageCount: t.messageCount ?? 1,
-
-    // your app logic uses these a lot — set safe defaults:
-    bucket: (t.from ?? "").includes("@marioromano.com") ? "Internal" : "Sales",
-    pinned: false,
-    awaitingSawyerReply: true,
-    followUpAt: null,
-    answeredQuestionIds: [],
   };
-});
-
-dispatch({ type: "SET_THREADS", payload: normalizedThreads });
-dispatch({ type: "PERFORM_SYNC" }); // keeps your “bucket state” logic consistent
-dispatch({ type: "SET_LAST_SYNC_TIME", payload: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) });
-
-
-
-  } catch (err) {
-    console.error(err);
-    alert("Sync failed — check console/logs");
-  } finally {
-    dispatch({ type: "SET_SYNCING", payload: false });
-  }
-};
 
 
   const handleLogout = () => {

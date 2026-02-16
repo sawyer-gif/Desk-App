@@ -14,12 +14,26 @@ export type ProjectStatus = 'Installation' | 'Shipping' | 'Support' | 'Change Or
 
 export type DateRange = 'Today' | '7 Days' | '30 Days' | '60 Days';
 
+export interface MessageAttachment {
+  filename: string;
+  mimeType?: string;
+  size?: number;
+  attachmentId?: string;
+  inline?: boolean;
+}
+
 export interface Message {
   id: string;
   sender: string;
   senderEmail: string;
   content: string;
   timestamp: string;
+  subject?: string;
+  to?: string;
+  cc?: string;
+  snippet?: string;
+  htmlContent?: string;
+  attachments?: MessageAttachment[];
 }
 
 export interface RoutingRule {
@@ -76,6 +90,7 @@ export interface AppState {
 
 export type Action =
   | { type: 'SET_THREADS'; payload: Thread[] }
+  | { type: 'SET_THREAD_MESSAGES'; payload: { threadId: string; messages: Message[] } }
   | { type: 'MOVE_THREAD'; payload: { id: string; bucket: Bucket; applyRule?: boolean } }
   | { type: 'SELECT_THREAD'; payload: string | null }
   | { type: 'NAVIGATE'; payload: ViewType }
@@ -94,7 +109,7 @@ export type Action =
   | { type: 'LOGIN' }
   | { type: 'LOGOUT' }
   | { type: 'TOGGLE_QUESTION_ANSWERED'; payload: { threadId: string; messageId: string } }
-  | { type: "SET_LAST_SYNC_TIME"; payload: string };
+  | { type: 'SET_LAST_SYNC_TIME'; payload: string };
 
 
 

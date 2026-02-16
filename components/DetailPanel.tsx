@@ -1,10 +1,11 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAppState } from '../store';
 import { Bucket, Priority } from '../types';
 import { Badge, PriorityBadge } from './Badge';
 import { X, ExternalLink, MessageSquare, History, ChevronDown, Pin, AtSign, CheckCircle2, ChevronUp } from 'lucide-react';
 import { formatReceivedTime, detectSawyerQuestions, getThreadSummary } from '../utils';
+import { useAuth } from '@clerk/clerk-react';
 
 const CATEGORY_DEFINITIONS: Record<string, string> = {
   Sales: "Pre-commitment: leads, quotes, proposals, bids, samples, renderings.",
@@ -46,7 +47,54 @@ export const DetailPanel: React.FC = () => {
   const [showPriorityOptions, setShowPriorityOptions] = useState(false);
   const [alwaysRoute, setAlwaysRoute] = useState(false);
   const [timelineExpanded, setTimelineExpanded] = useState(false);
-  
+  const [rawThreadData, setRawThreadData] = useState<Record<string, any>>({});
+  const [loadingThreadId, setLoadingThreadId] = useState<string | null>(null);
+  const [threadError, setThreadError] = useState<string | null>(null);
+  const { getToken } = useAuth();
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchThreadDetail(currentThreadId: string) {
+      try {
+        setThreadError(null);
+        setLoadingThreadId(currentThreadId);
+        const authToken = (await getToken?.()) || '';
+        if (!authToken) {
+          throw new Error('Missing auth token');
+        }
+        const response = await fetch(`/api/google/gmail-thread-detail?threadId=${encodeURIComponent(currentThreadId)}`, {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        });
+        const json = await response.json();
+        if (!response.ok) {
+          throw new Error(json?.error || 'Failed to load thread');
+        }
+        if (!cancelled) {
+          setRawThreadData(prev => ({ ...prev, [currentThreadId]: json }));
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setThreadError(err?.message || 'Failed to load thread');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingThreadId(prev => (prev === currentThreadId ? null : prev));
+        }
+      }
+    }
+
+    if (thread?.id && !rawThreadData[thread.id]) {
+      fetchThreadDetail(thread.id);
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [thread?.id, rawThreadData, getToken]);
+
   const timelineRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const handleClosePanel = () => {
@@ -73,6 +121,8 @@ export const DetailPanel: React.FC = () => {
   }
 
   const messages = Array.isArray(thread.messages) ? thread.messages : [];
+  const currentThreadData = thread ? rawThreadData[thread.id] : null;
+  const isLoadingThread = loadingThreadId === thread.id;
   const hasMessages = messages.length > 0;
   const answeredIds = Array.isArray(thread.answeredQuestionIds) ? thread.answeredQuestionIds : [];
   const questions = detectSawyerQuestions(messages) || [];
@@ -200,6 +250,25 @@ export const DetailPanel: React.FC = () => {
             </div>
           </section>
         )}
+
+        {/* Raw Gmail Payload */}
+        <section className="border border-dashed border-desk-text-secondary-light/30 dark:border-desk-text-secondary-dark/30 rounded-2xl p-4">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-[11px] font-bold uppercase tracking-widest text-desk-text-secondary-light dark:text-desk-text-secondary-dark">Live Gmail Payload</h3>
+            {isLoadingThread && <span className="text-[10px] text-blue-500 font-bold">Loading…</span>}
+          </div>
+          {threadError && (
+            <p className="text-xs text-red-500 font-semibold">{threadError}</p>
+          )}
+          {!threadError && !currentThreadData && !isLoadingThread && (
+            <p className="text-xs text-desk-text-secondary-light dark:text-desk-text-secondary-dark">Select a thread to load Gmail data.</p>
+          )}
+          {currentThreadData && (
+            <pre className="text-[11px] leading-snug whitespace-pre-wrap break-all text-desk-text-secondary-light dark:text-desk-text-secondary-dark bg-black/5 dark:bg-white/5 rounded-xl p-3 overflow-auto max-h-[240px]">
+              {JSON.stringify(currentThreadData, null, 2)}
+            </pre>
+          )}
+        </section>
 
         {/* Conversation Timeline */}
         <section>
