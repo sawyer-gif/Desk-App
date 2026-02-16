@@ -45,6 +45,8 @@ export interface Thread {
   id: string;
   fromName: string;
   fromEmail: string;
+  fromCompany?: string;
+  fromDomain?: string;
   subject: string;
   project: string;
   actionPhrase?: string;

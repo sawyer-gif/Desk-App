@@ -12,6 +12,18 @@ const parseEmailAddress = (raw: string) => {
   return { name, email };
 };
 
+const deriveCompanyFromEmail = (email: string) => {
+  if (!email || !email.includes('@')) return '';
+  const domain = email.split('@')[1]?.toLowerCase() || '';
+  if (!domain) return '';
+  const core = domain.split('.')[0] || domain;
+  if (!core) return '';
+  return core
+    .split('-')
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+};
+
 const inferBucket = (email: string) => {
   if (!email) return Bucket.SALES;
   const normalized = email.toLowerCase();
@@ -25,12 +37,15 @@ const normalizeThreads = (threads: any[]): Thread[] => {
     const { name, email } = parseEmailAddress(t.from ?? '');
     const inboundDate = t.date ? new Date(t.date) : new Date();
     const subject = t.subject ?? '(no subject)';
+    const domain = email?.includes('@') ? email.split('@')[1] : '';
 
     return {
       id: t.id,
       subject,
       fromEmail: email,
       fromName: name || email || 'Unknown sender',
+      fromCompany: deriveCompanyFromEmail(email),
+      fromDomain: domain,
       project: subject,
       actionPhrase: undefined,
       contextTag: 'Lead',

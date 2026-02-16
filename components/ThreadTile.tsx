@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Thread, ProjectStatus } from '../types';
+import { Thread } from '../types';
 import { useAppState } from '../store';
 import { Sparkles, AlertCircle, Bell, Pin, AtSign } from 'lucide-react';
 import { formatReceivedTime, computeWaitingText, getWaitingColorClass, detectSawyerQuestions } from '../utils';
@@ -9,13 +9,6 @@ interface ThreadTileProps {
   thread: Thread;
   compact?: boolean;
 }
-
-const statusColorMap: Record<ProjectStatus, string> = {
-  'Installation': 'bg-blue-100/60 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',
-  'Shipping': 'bg-green-100/60 dark:bg-green-900/30 text-green-700 dark:text-green-300',
-  'Support': 'bg-amber-100/60 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
-  'Change Order': 'bg-purple-100/60 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300',
-};
 
 export const ThreadTile: React.FC<ThreadTileProps> = ({ thread, compact = false }) => {
   const { state, dispatch } = useAppState();
@@ -70,22 +63,31 @@ const openQuestionsCount = questions.filter(q => !answeredIds.includes(q.id)).le
         </div>
         
         <div className="flex flex-col min-w-0">
-          <div className="flex items-center gap-2 mb-0.5">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[13px] font-bold text-[#1D1D1F] dark:text-zinc-100 truncate">
+              {thread.fromName || thread.fromEmail}
+            </span>
+            {thread.fromCompany && (
+              <span className="text-[10px] font-bold uppercase tracking-widest text-[#86868B] dark:text-zinc-400">
+                {thread.fromCompany}
+              </span>
+            )}
             <span className="text-[10px] font-bold uppercase tracking-wider text-[#A1A1A6] dark:text-zinc-500 shrink-0">
               {thread.contextTag}
             </span>
-            <span className="text-[13px] font-bold text-[#424245] dark:text-zinc-300 truncate">
-              {thread.project}
-            </span>
-            {thread.projectStatus && (
-              <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-md shrink-0 ${statusColorMap[thread.projectStatus]}`}>
-                {thread.projectStatus}
-              </span>
-            )}
+          </div>
+          <div className="flex items-center gap-2 mb-1 text-[11px] text-[#86868B] dark:text-zinc-500 truncate">
+            <span className="truncate">{thread.fromEmail}</span>
+            {thread.fromDomain && <span className="text-[#C6C6C8] dark:text-zinc-600">• {thread.fromDomain}</span>}
           </div>
           <p className={`text-[14px] truncate ${thread.unread ? 'font-semibold text-[#1D1D1F] dark:text-zinc-100' : 'text-[#86868B] dark:text-zinc-500'}`}>
-            {thread.actionPhrase || thread.subject}
+            {thread.subject}
           </p>
+          {thread.snippet && (
+            <p className="text-[12px] text-[#A1A1A6] dark:text-zinc-500 truncate">
+              {thread.snippet}
+            </p>
+          )}
         </div>
       </div>
 
