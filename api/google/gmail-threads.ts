@@ -5,6 +5,15 @@ import {
   ACTIONABILITY_KEYWORD_BLOCKLIST,
 } from "../../config/actionability";
 
+class ConfigError extends Error {
+  missing: string;
+  constructor(missing: string) {
+    super(`Missing env var: ${missing}`);
+    this.name = 'ConfigError';
+    this.missing = missing;
+  }
+}
+
 type GmailThreadListResponse = {
   threads?: { id: string }[];
   nextPageToken?: string;
@@ -33,7 +42,7 @@ const THREAD_META_CONCURRENCY = Number(process.env.GMAIL_THREAD_CONCURRENCY || 8
 
 function requireEnv(name: string) {
   const v = process.env[name];
-  if (!v) throw new Error(`Missing env var: ${name}`);
+  if (!v) throw new ConfigError(name);
   return v;
 }
 
@@ -231,7 +240,8 @@ async function fetchThreadMetas(accessToken: string, ids: string[], accountEmail
 
 function clampRangeDays(raw: any) {
   const parsed = Number(raw);
-  if (!Number.isFinite(parsed)) return 30;
+  const fallback = 14;
+  if (!Number.isFinite(parsed)) return fallback;
   return Math.min(60, Math.max(1, parsed));
 }
 
@@ -241,37 +251,55 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const authHeader = req.headers.authorization || "";
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-    if (!token) return res.status(401).json({ error: "Missing Authorization Bearer token" });
+    if (!token) {
+      return res.status(401).json({ ok: false, code: "AUTH_REQUIRED", message: "Connect Google to sync" });
+    }
 
-    const verified = await verifyToken(token, {
-      secretKey: requireEnv("CLERK_SECRET_KEY"),
-    });
+    const clerkSecret = process.env.CLERK_SECRET_KEY;
+    if (!clerkSecret) {
+      console.error("[Desk] Missing env var CLERK_SECRET_KEY");
+      return res.status(500).json({ ok: false, code: "CONFIG_MISSING", message: "Missing env var CLERK_SECRET_KEY" });
+    }
 
-    const userId = verified.sub;
-    if (!userId) return res.status(401).json({ error: "No userId in token" });
+    let verified;
+    try {
+      verified = await verifyToken(token, { secretKey: clerkSecret });
+    } catch (authErr) {
+      console.error("[Desk] Clerk token verification failed", authErr);
+      return res.status(401).json({ ok: false, code: "AUTH_REQUIRED", message: "Connect Google to sync" });
+    }
 
-    const clerk = createClerkClient({ secretKey: requireEnv("CLERK_SECRET_KEY") });
+    const userId = verified?.sub;
+    if (!userId) {
+      return res.status(401).json({ ok: false, code: "AUTH_REQUIRED", message: "Connect Google to sync" });
+    }
+
+    const clerk = createClerkClient({ secretKey: clerkSecret });
     const user = await clerk.users.getUser(userId);
 
     const google = (user.privateMetadata as any)?.google?.gmail;
     const refreshToken = google?.refresh_token;
 
     if (!google?.connected) {
-      return res.status(200).json({ connected: false, threads: [] });
+      return res.status(200).json({ ok: true, connected: false, threads: [] });
     }
     if (!refreshToken) {
       return res.status(200).json({
+        ok: true,
         connected: true,
         needsReconnect: true,
         threads: [],
-        message: "No refresh token stored. Reconnect Gmail to issue one.",
+        message: "Reconnect Gmail to issue a refresh token.",
       });
     }
 
     const { access_token } = await refreshAccessToken(refreshToken);
 
     const rangeDays = clampRangeDays(req.query.days);
-    const pageSize = Math.min(Number(req.query.pageSize) || PAGE_SIZE, 200);
+    const requestedPageSize = Number(req.query.pageSize);
+    const pageSize = Number.isFinite(requestedPageSize)
+      ? Math.min(Math.max(1, requestedPageSize), 200)
+      : PAGE_SIZE;
     const accountEmail = (google?.email || "").toLowerCase();
 
     const queryParts = [
@@ -318,6 +346,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const metas = await fetchThreadMetas(access_token, ids, accountEmail);
 
     return res.status(200).json({
+      ok: true,
       connected: true,
       email: google?.email || null,
       threads: metas,
@@ -332,6 +361,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     });
   } catch (e: any) {
-    return res.status(500).json({ error: e?.message || "Server error" });
+    if (e instanceof ConfigError) {
+      console.error(`[Desk] Missing env var: ${e.missing}`);
+      return res.status(500).json({ ok: false, code: "CONFIG_MISSING", message: `Missing env var ${e.missing}` });
+    }
+    console.error("[Desk] gmail-threads server error", e);
+    return res.status(500).json({ ok: false, code: "SERVER_ERROR", message: "Unable to fetch Gmail threads" });
   }
 }

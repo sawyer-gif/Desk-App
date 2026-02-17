@@ -118,13 +118,18 @@ export const Header: React.FC = () => {
         cache: "no-store",
       });
 
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt);
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok || data?.ok === false) {
+        if ((res.status === 401 || data?.code === 'AUTH_REQUIRED')) {
+          alert('Connect Google to sync your inbox.');
+          return;
+        }
+        const message = data?.message || 'Sync failed. Try again.';
+        throw new Error(message);
       }
 
-      const data = await res.json();
-      const normalizedThreads = normalizeThreads(data.threads ?? []);
+      const normalizedThreads = normalizeThreads(data?.threads ?? []);
 
       dispatch({ type: "SET_THREADS", payload: normalizedThreads });
       dispatch({ type: "PERFORM_SYNC" });
@@ -146,9 +151,9 @@ export const Header: React.FC = () => {
           lastUpdated: new Date().toISOString(),
         },
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Sync failed — check console/logs");
+      alert(err?.message || "Sync failed. Try again.");
     } finally {
       dispatch({ type: "SET_SYNCING", payload: false });
     }
