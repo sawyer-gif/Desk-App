@@ -245,7 +245,20 @@ function clampRangeDays(raw: any) {
   return Math.min(60, Math.max(1, parsed));
 }
 
+const REQUIRED_ENV_VARS = [
+  "CLERK_SECRET_KEY",
+  "GOOGLE_CLIENT_ID",
+  "GOOGLE_CLIENT_SECRET",
+  "OAUTH_STATE_SECRET",
+];
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  const missing = REQUIRED_ENV_VARS.filter((key) => !process.env[key]);
+  if (missing.length) {
+    console.error("[Desk] Missing env:", missing);
+    return res.status(500).json({ ok: false, code: "MISCONFIGURED_ENV", missing });
+  }
+
   try {
     if (req.method !== "GET") return res.status(405).send("Method not allowed");
 
@@ -361,11 +374,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     });
   } catch (e: any) {
-    if (e instanceof ConfigError) {
-      console.error(`[Desk] Missing env var: ${e.missing}`);
-      return res.status(500).json({ ok: false, code: "CONFIG_MISSING", message: `Missing env var ${e.missing}` });
-    }
-    console.error("[Desk] gmail-threads server error", e);
-    return res.status(500).json({ ok: false, code: "SERVER_ERROR", message: "Unable to fetch Gmail threads" });
+    console.error("[Desk] gmail sync failure:", e);
+    const message = typeof e?.message === 'string' ? e.message : 'Unable to sync Gmail threads';
+    return res.status(500).json({ ok: false, code: "SYNC_FAILED", message });
   }
 }
