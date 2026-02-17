@@ -199,6 +199,12 @@ async function fetchThreadMetas(accessToken: string, ids: string[], accountEmail
         )
       );
 
+      const lastMessage = messages[messages.length - 1];
+      const lastHeaders = lastMessage?.payload?.headers || [];
+      const lastFrom = parseEmailAddress(headerValue(lastHeaders, "From"));
+      const lastMessageFromAccount = Boolean(accountEmail && lastFrom && lastFrom === accountEmail.toLowerCase());
+      const hasInboxLabel = labelIds.includes("INBOX");
+
       metas.push({
         id: chunk[index],
         subject,
@@ -212,6 +218,9 @@ async function fetchThreadMetas(accessToken: string, ids: string[], accountEmail
           latestExternalEmail: latestEmail,
           latestHeaders: latestHeadersMap,
           autoFlags,
+          hasInbox: hasInboxLabel,
+          lastMessageFromAccount,
+          lastMessageEmail: lastFrom,
         },
       });
     });

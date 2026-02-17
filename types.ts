@@ -47,6 +47,9 @@ export interface ThreadMetaInfo {
   latestExternalEmail?: string;
   latestHeaders?: Record<string, string>;
   autoFlags?: string[];
+  hasInbox?: boolean;
+  lastMessageFromAccount?: boolean;
+  lastMessageEmail?: string;
 }
 
 export interface Thread {

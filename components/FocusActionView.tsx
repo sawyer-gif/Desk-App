@@ -12,6 +12,7 @@ export const FocusActionView: React.FC = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [allowInput, setAllowInput] = useState('');
   const [blockInput, setBlockInput] = useState('');
+  const showFilterDebug = import.meta.env?.VITE_FOCUS_FILTER_DEBUG === 'true';
 
   const toggleSection = (id: string) => {
     const next = new Set(expandedSections);
@@ -43,6 +44,14 @@ const handleAddBlock = (e: React.FormEvent) => {
   if (!blockInput.trim()) return;
   dispatch({ type: 'ADD_BLOCKLIST_DOMAIN', payload: blockInput.trim() });
   setBlockInput('');
+};
+
+const handleRemoveAllow = (domain: string) => {
+  dispatch({ type: 'REMOVE_ALLOWLIST_DOMAIN', payload: domain });
+};
+
+const handleRemoveBlock = (domain: string) => {
+  dispatch({ type: 'REMOVE_BLOCKLIST_DOMAIN', payload: domain });
 };
 
 
@@ -153,6 +162,17 @@ const handleAddBlock = (e: React.FormEvent) => {
                 <span>{actionableCount} actionable</span>
                 <span>{totalThreads} total</span>
                 <span>Last sync {state.lastSyncTime}</span>
+                {showFilterDebug && (
+                  <button
+                    type="button"
+                    onClick={() => setShowFilters((prev) => !prev)}
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400 hover:underline"
+                    title="Why filtered?"
+                  >
+                    <Filter className="w-3.5 h-3.5" />
+                    Filtered ({suppressedCount})
+                  </button>
+                )}
               </div>
             </div>
             {!state.isSyncing && syncMeta?.capped && (
@@ -161,6 +181,74 @@ const handleAddBlock = (e: React.FormEvent) => {
               </p>
             )}
           </div>
+
+          {showFilterDebug && showFilters && (
+            <div className="mb-10 rounded-2xl border border-dashed border-amber-300/60 bg-amber-50/70 dark:bg-zinc-900/40 p-5 text-[12px] text-[#424245] dark:text-zinc-200">
+              <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-amber-700 dark:text-amber-300 mb-3">Filter Overrides</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-[11px] font-semibold text-[#86868B] dark:text-zinc-400 mb-1">Allowlist Domains</p>
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {allowlist.length === 0 && <span className="text-[11px] text-[#A1A1A6]">None</span>}
+                    {allowlist.map((domain) => (
+                      <span key={domain} className="inline-flex items-center gap-1 bg-white dark:bg-zinc-800 px-2 py-0.5 rounded-full">
+                        {domain}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveAllow(domain)}
+                          className="text-amber-600 dark:text-amber-400"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <form onSubmit={handleAddAllow} className="flex gap-2">
+                    <input
+                      type="text"
+                      value={allowInput}
+                      onChange={(e) => setAllowInput(e.target.value)}
+                      placeholder="domain.com"
+                      className="flex-1 rounded-lg border border-amber-200 bg-white/70 px-2 py-1 text-[11px]"
+                    />
+                    <button type="submit" className="px-2 py-1 text-[11px] font-semibold text-white bg-amber-500 rounded-lg">
+                      Add
+                    </button>
+                  </form>
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-[#86868B] dark:text-zinc-400 mb-1">Blocklist Domains</p>
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {blocklist.length === 0 && <span className="text-[11px] text-[#A1A1A6]">None</span>}
+                    {blocklist.map((domain) => (
+                      <span key={domain} className="inline-flex items-center gap-1 bg-white dark:bg-zinc-800 px-2 py-0.5 rounded-full">
+                        {domain}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveBlock(domain)}
+                          className="text-amber-600 dark:text-amber-400"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <form onSubmit={handleAddBlock} className="flex gap-2">
+                    <input
+                      type="text"
+                      value={blockInput}
+                      onChange={(e) => setBlockInput(e.target.value)}
+                      placeholder="domain.com"
+                      className="flex-1 rounded-lg border border-amber-200 bg-white/70 px-2 py-1 text-[11px]"
+                    />
+                    <button type="submit" className="px-2 py-1 text-[11px] font-semibold text-white bg-amber-500 rounded-lg">
+                      Block
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          )}
 
           {renderSection('do-now', 'Do Now', <Zap />, doNow, 'bg-red-500')}
           {renderSection('needs-reply', 'Needs Reply', <Inbox />, needsReply, 'bg-blue-500')}

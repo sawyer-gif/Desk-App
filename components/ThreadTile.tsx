@@ -20,6 +20,8 @@ export const ThreadTile: React.FC<ThreadTileProps> = ({ thread, compact = false 
   const isMuted = Boolean(thread.isMuted);
   const isSuppressed = thread.isActionable === false;
   const suppressionLabel = isMuted ? 'Muted' : isSuppressed ? 'Filtered' : null;
+  const showFilterDebug = import.meta.env?.VITE_FOCUS_FILTER_DEBUG === 'true';
+  const showSuppressionBadge = showFilterDebug && suppressionLabel;
   const waitingText = computeWaitingText(waitingDays, showWaiting);
   const waitingColor = getWaitingColorClass(waitingDays, showWaiting);
 
@@ -78,7 +80,7 @@ const openQuestionsCount = questions.filter(q => !answeredIds.includes(q.id)).le
             <span className="text-[10px] font-bold uppercase tracking-wider text-[#A1A1A6] dark:text-zinc-500 shrink-0">
               {thread.contextTag}
             </span>
-            {suppressionLabel && (
+            {showSuppressionBadge && (
               <span className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
                 {suppressionLabel}
               </span>
@@ -96,8 +98,8 @@ const openQuestionsCount = questions.filter(q => !answeredIds.includes(q.id)).le
               {thread.snippet}
             </p>
           )}
-          {suppressionLabel && thread.nonActionableReason && (
-            <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 truncate">
+          {showSuppressionBadge && thread.nonActionableReason && (
+            <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 truncate" title={thread.nonActionableReason || ''}>
               Hidden: {thread.nonActionableReason}
             </p>
           )}

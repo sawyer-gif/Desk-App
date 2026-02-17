@@ -3,14 +3,16 @@ export const ACTIONABILITY_NO_REPLY_PATTERNS = [
   "noreply",
   "do-not-reply",
   "donotreply",
-  "automated",
 ];
 
 export const ACTIONABILITY_KEYWORD_BLOCKLIST = [
   "payment processed",
   "receipt",
   "invoice",
+  "account has been funded",
   "billing",
+  "usage limits",
+  "subscription",
   "notification",
   "security advisory",
   "inventory",
@@ -19,6 +21,50 @@ export const ACTIONABILITY_KEYWORD_BLOCKLIST = [
   "statement",
   "alert",
   "policy update",
+  "verification code",
+  "password",
+  "confirm your",
+  "do not reply",
+  "your api",
+];
+
+export const ACTIONABILITY_SYSTEM_KEYWORDS = [
+  "payment processed",
+  "receipt",
+  "invoice",
+  "account has been funded",
+  "usage limits",
+  "your api",
+  "verification code",
+  "security alert",
+  "password",
+  "confirm your",
+  "subscription",
+  "auto-reply",
+  "billing",
+  "statement",
+  "notification",
+];
+
+export const ACTIONABILITY_SENDER_KEYWORDS = [
+  "billing",
+  "receipt",
+  "invoice",
+  "subscription",
+  "auto-reply",
+  "support",
+];
+
+export const ACTIONABILITY_DOMAIN_BLOCKLIST = [
+  "zoom.us",
+  "tm.openai.com",
+  "openai.com",
+  "stripe.com",
+  "mailchimp.com",
+  "sendgrid.net",
+  "hubspot.com",
+  "intercom.com",
+  "flow.space",
 ];
 
 export const ACTIONABILITY_DEFAULT_ALLOWLIST = [
@@ -35,4 +81,14 @@ export const ACTIONABILITY_DEFAULT_BLOCKLIST = [
   "cloudplatform-noreply@google.com",
   "accounts.google.com",
   "notifications.google.com",
+];
+
+export const GMAIL_EXCLUDED_LABELS = [
+  'CATEGORY_PROMOTIONS',
+  'CATEGORY_SOCIAL',
+  'CATEGORY_UPDATES',
+  'CATEGORY_FORUMS',
+  'SPAM',
+  'TRASH',
+  'DRAFT',
 ];

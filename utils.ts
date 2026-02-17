@@ -3,8 +3,12 @@ import { Bucket, Thread, Message, ActionabilityPrefs } from './types';
 import {
   ACTIONABILITY_NO_REPLY_PATTERNS,
   ACTIONABILITY_KEYWORD_BLOCKLIST,
+  ACTIONABILITY_SYSTEM_KEYWORDS,
+  ACTIONABILITY_SENDER_KEYWORDS,
+  ACTIONABILITY_DOMAIN_BLOCKLIST,
   ACTIONABILITY_DEFAULT_ALLOWLIST,
   ACTIONABILITY_DEFAULT_BLOCKLIST,
+  GMAIL_EXCLUDED_LABELS,
 } from './config/actionability';
 
 export function formatReceivedTime(timestamp: string): string {
@@ -143,41 +147,89 @@ export function evaluateThreadActionability(thread: Thread, prefs?: Actionabilit
   const latestEmail = (thread.meta?.latestExternalEmail || thread.fromEmail || '').toLowerCase();
   const allowlisted = domain && allowlist.has(domain);
   const muted = Boolean(prefs?.mutedThreads?.[thread.id]);
+  const meta = thread.meta || {};
+  const labelIds = Array.isArray(meta.labelIds) ? meta.labelIds : [];
+  const labelSet = new Set(labelIds);
+  const hasInbox = meta.hasInbox ?? labelSet.has('INBOX');
+  const reasons: string[] = [];
 
   if (muted) {
     return { isActionable: false, reason: 'muted-by-user', isMuted: true };
   }
 
-  if (domain && blocklist.has(domain)) {
-    return { isActionable: false, reason: `domain-blocked:${domain}`, isMuted: false };
+  const positiveFailures: string[] = [];
+
+  if (!hasInbox) {
+    positiveFailures.push('missing-inbox');
   }
 
-  const reasons: string[] = [];
-  const meta = thread.meta || {};
-
-  if (!meta.latestExternalEmail && !allowlisted) {
-    reasons.push('no-external-message');
+  const excludedLabel = labelIds.find((label) => GMAIL_EXCLUDED_LABELS.includes(label));
+  if (excludedLabel) {
+    positiveFailures.push(`label:${excludedLabel}`);
   }
 
-  if (!allowlisted && latestEmail && ACTIONABILITY_NO_REPLY_PATTERNS.some((pattern) => latestEmail.includes(pattern))) {
-    reasons.push('no-reply-address');
+  if (!meta.latestExternalEmail) {
+    positiveFailures.push('no-external-message');
   }
 
-  const autoFlags = meta.autoFlags || [];
-  if (!allowlisted && autoFlags.length) {
-    reasons.push(...autoFlags);
+  const lastMessageFromAccount = Boolean(meta.lastMessageFromAccount);
+  if (lastMessageFromAccount && !thread.awaitingSawyerReply) {
+    positiveFailures.push('last-message-from-me');
   }
 
+  const emailLower = (thread.fromEmail || '').toLowerCase();
+  const displayLower = (thread.fromName || '').toLowerCase();
   const haystack = `${thread.subject} ${thread.snippet}`.toLowerCase();
-  if (!allowlisted && ACTIONABILITY_KEYWORD_BLOCKLIST.some((kw) => haystack.includes(kw))) {
-    reasons.push('keyword-match');
+  const systemKeywordMatch = ACTIONABILITY_SYSTEM_KEYWORDS.some((kw) => haystack.includes(kw));
+
+  if (positiveFailures.length) {
+    return { isActionable: false, reason: positiveFailures[0], isMuted: false };
+  }
+
+  if (!allowlisted) {
+    if (latestEmail && ACTIONABILITY_NO_REPLY_PATTERNS.some((pattern) => latestEmail.includes(pattern))) {
+      reasons.push('no-reply-address');
+    }
+
+    const senderKeyword = ACTIONABILITY_SENDER_KEYWORDS.find((kw) => emailLower.includes(kw) || displayLower.includes(kw));
+    if (senderKeyword) {
+      const requiresSystem = senderKeyword === 'support';
+      if (!requiresSystem || (requiresSystem && systemKeywordMatch)) {
+        reasons.push(`sender-keyword:${senderKeyword}`);
+      }
+    }
+
+    const autoFlags = meta.autoFlags || [];
+    if (autoFlags.length) {
+      reasons.push(...autoFlags);
+    }
+
+    if (ACTIONABILITY_KEYWORD_BLOCKLIST.some((kw) => haystack.includes(kw))) {
+      reasons.push('keyword-match');
+    }
+
+    if (domain && blocklist.has(domain)) {
+      reasons.push(`domain-blocked:${domain}`);
+    }
+
+    if (domain && ACTIONABILITY_DOMAIN_BLOCKLIST.includes(domain) && systemKeywordMatch) {
+      reasons.push(`domain-keyword:${domain}`);
+    }
+
+    if (emailLower.includes('support@') && systemKeywordMatch) {
+      reasons.push('support-system');
+    }
+
+    if ((displayLower.includes('billing') || emailLower.includes('billing@')) && systemKeywordMatch) {
+      reasons.push('billing-sender');
+    }
   }
 
   const actionable = allowlisted || reasons.length === 0;
 
   return {
     isActionable: actionable,
-    reason: actionable ? null : reasons[0],
+    reason: actionable ? null : (reasons[0] || null),
     isMuted: false,
   };
 }
