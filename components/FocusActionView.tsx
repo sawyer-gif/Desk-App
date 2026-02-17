@@ -3,12 +3,15 @@ import React, { useState } from 'react';
 import { useAppState } from '../store';
 import { Thread, Priority } from '../types';
 import { ThreadTile } from './ThreadTile';
-import { ChevronRight, Zap, Inbox, Bell, ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronRight, Zap, Inbox, Bell, ChevronDown, ChevronUp, Filter } from 'lucide-react';
 import { getWaitingStatus, isActionableThread } from '../utils';
 
 export const FocusActionView: React.FC = () => {
-  const { state } = useAppState();
+  const { state, dispatch } = useAppState();
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['do-now', 'needs-reply', 'follow-ups']));
+  const [showFilters, setShowFilters] = useState(false);
+  const [allowInput, setAllowInput] = useState('');
+  const [blockInput, setBlockInput] = useState('');
 
   const toggleSection = (id: string) => {
     const next = new Set(expandedSections);
@@ -22,7 +25,25 @@ const threads: Thread[] = Array.isArray((state as any).threads) ? ((state as any
 const actionable = threads.filter(isActionableThread);
 const actionableCount = actionable.length;
 const totalThreads = threads.length;
+const suppressedCount = Math.max(0, totalThreads - actionableCount);
 const syncMeta = state.syncMeta;
+const mutedCount = Object.keys(state.actionabilityPrefs?.mutedThreads || {}).length;
+const allowlist = state.actionabilityPrefs?.allowlistDomains || [];
+const blocklist = state.actionabilityPrefs?.blocklistDomains || [];
+
+const handleAddAllow = (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!allowInput.trim()) return;
+  dispatch({ type: 'ADD_ALLOWLIST_DOMAIN', payload: allowInput.trim() });
+  setAllowInput('');
+};
+
+const handleAddBlock = (e: React.FormEvent) => {
+  e.preventDefault();
+  if (!blockInput.trim()) return;
+  dispatch({ type: 'ADD_BLOCKLIST_DOMAIN', payload: blockInput.trim() });
+  setBlockInput('');
+};
 
 
   // Logic: 

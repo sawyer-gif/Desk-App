@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Thread, Bucket } from '../types';
 import { useAppState } from '../store';
-import { Sparkles, AlertCircle, Bell, Pin, AtSign } from 'lucide-react';
+import { Sparkles, AlertCircle, Bell, Pin, AtSign, EyeOff, Eye } from 'lucide-react';
 import { formatReceivedTime, computeWaitingText, getWaitingColorClass, detectSawyerQuestions, getWaitingStatus } from '../utils';
 
 interface ThreadTileProps {
@@ -17,6 +17,9 @@ export const ThreadTile: React.FC<ThreadTileProps> = ({ thread, compact = false 
 
   const receivedTime = formatReceivedTime(thread.lastInboundAt);
   const { waitingDays, showWaiting, isOverdue } = getWaitingStatus(thread);
+  const isMuted = Boolean(thread.isMuted);
+  const isSuppressed = thread.isActionable === false;
+  const suppressionLabel = isMuted ? 'Muted' : isSuppressed ? 'Filtered' : null;
   const waitingText = computeWaitingText(waitingDays, showWaiting);
   const waitingColor = getWaitingColorClass(waitingDays, showWaiting);
 
@@ -75,6 +78,11 @@ const openQuestionsCount = questions.filter(q => !answeredIds.includes(q.id)).le
             <span className="text-[10px] font-bold uppercase tracking-wider text-[#A1A1A6] dark:text-zinc-500 shrink-0">
               {thread.contextTag}
             </span>
+            {suppressionLabel && (
+              <span className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                {suppressionLabel}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2 mb-1 text-[11px] text-[#86868B] dark:text-zinc-500 truncate">
             <span className="truncate">{thread.fromEmail}</span>
@@ -86,6 +94,11 @@ const openQuestionsCount = questions.filter(q => !answeredIds.includes(q.id)).le
           {thread.snippet && (
             <p className="text-[12px] text-[#A1A1A6] dark:text-zinc-500 truncate">
               {thread.snippet}
+            </p>
+          )}
+          {suppressionLabel && thread.nonActionableReason && (
+            <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 truncate">
+              Hidden: {thread.nonActionableReason}
             </p>
           )}
         </div>
@@ -103,8 +116,19 @@ const openQuestionsCount = questions.filter(q => !answeredIds.includes(q.id)).le
                   dispatch({ type: 'TOGGLE_DRAFT_MODAL', payload: true });
                 }}
                 className="p-1 hover:bg-gray-200/50 dark:hover:bg-zinc-700/50 rounded-lg text-[#86868B]"
+                title="Open AI draft"
               >
                 <Sparkles className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  dispatch({ type: 'TOGGLE_THREAD_MUTE', payload: { threadId: thread.id } });
+                }}
+                className="p-1 hover:bg-gray-200/50 dark:hover:bg-zinc-700/50 rounded-lg text-[#86868B]"
+                title={isMuted ? 'Unmute thread' : 'Mute as not actionable'}
+              >
+                {isMuted ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
               </button>
             </div>
           )}

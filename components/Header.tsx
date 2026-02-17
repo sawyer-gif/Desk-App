@@ -86,6 +86,7 @@ const normalizeThreads = (threads: any[]): Thread[] => {
       originalBucket: null,
       lastActionableAt: inboundDate.toISOString(),
       daysSinceLastActionable: 0,
+      meta: t.meta || undefined,
     } as Thread;
   });
 };

@@ -1,12 +1,14 @@
 
 import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react';
-import { AppState, Action, Bucket, Thread, RoutingRule, ManualClearedMap } from './types';
+import { AppState, Action, Bucket, Thread, RoutingRule, ManualClearedMap, ActionabilityPrefs } from './types';
+import { evaluateThreadActionability } from './utils';
 
 const DETAIL_WIDTH_KEY = 'desk-detail-panel-width';
 const DETAIL_COLLAPSE_KEY = 'desk-detail-panel-collapsed';
 const MANUAL_CLEAR_KEY = 'desk-manual-cleared';
 const DARK_MODE_KEY = 'desk-dark-mode';
 const AUTH_KEY = 'desk-auth';
+const ACTIONABILITY_PREFS_KEY = 'desk-actionability-prefs';
 
 export const DETAIL_PANEL_MIN_WIDTH = 360;
 export const DETAIL_PANEL_MAX_WIDTH = 760;
@@ -43,6 +45,34 @@ const persistManualCleared = (map: ManualClearedMap) => {
   localStorage.setItem(MANUAL_CLEAR_KEY, JSON.stringify(map));
 };
 
+const defaultActionabilityPrefs: ActionabilityPrefs = {
+  mutedThreads: {},
+  allowlistDomains: [],
+  blocklistDomains: [],
+};
+
+const loadActionabilityPrefs = (): ActionabilityPrefs => {
+  if (typeof window === 'undefined') return defaultActionabilityPrefs;
+  try {
+    const stored = localStorage.getItem(ACTIONABILITY_PREFS_KEY);
+    if (!stored) return defaultActionabilityPrefs;
+    const parsed = JSON.parse(stored);
+    return {
+      mutedThreads: parsed?.mutedThreads || {},
+      allowlistDomains: Array.isArray(parsed?.allowlistDomains) ? parsed.allowlistDomains : [],
+      blocklistDomains: Array.isArray(parsed?.blocklistDomains) ? parsed.blocklistDomains : [],
+    } as ActionabilityPrefs;
+  } catch (err) {
+    console.warn('[Desk] Failed to load actionability prefs', err);
+    return defaultActionabilityPrefs;
+  }
+};
+
+const persistActionabilityPrefs = (prefs: ActionabilityPrefs) => {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(ACTIONABILITY_PREFS_KEY, JSON.stringify(prefs));
+};
+
 const persistDetailWidth = (width: number) => {
   if (typeof window === 'undefined') return;
   localStorage.setItem(DETAIL_WIDTH_KEY, String(width));
@@ -70,6 +100,7 @@ const initialState: AppState = {
   detailPanelWidth: clamp(readNumber(DETAIL_WIDTH_KEY, DEFAULT_DETAIL_PANEL_WIDTH), DETAIL_PANEL_MIN_WIDTH, DETAIL_PANEL_MAX_WIDTH),
   isDetailPanelCollapsed: readBoolean(DETAIL_COLLAPSE_KEY, false),
   syncMeta: null,
+  actionabilityPrefs: loadActionabilityPrefs(),
 };
 
 function computeActionableMeta(thread: Thread) {
@@ -98,7 +129,12 @@ function computeActionableMeta(thread: Thread) {
   return { daysUnresponded, lastActionableAt, daysSinceLastActionable };
 }
 
-function reevaluateThreadState(thread: Thread, rules: RoutingRule[], manualCleared: ManualClearedMap): Thread {
+function reevaluateThreadState(
+  thread: Thread,
+  rules: RoutingRule[],
+  manualCleared: ManualClearedMap,
+  actionabilityPrefs: ActionabilityPrefs
+): Thread {
   const lastInbound = thread.lastInboundAt ? new Date(thread.lastInboundAt).getTime() : 0;
   const lastOutbound = thread.lastOutboundAt ? new Date(thread.lastOutboundAt).getTime() : 0;
   
@@ -127,7 +163,7 @@ function reevaluateThreadState(thread: Thread, rules: RoutingRule[], manualClear
     bucket = Bucket.CLEARED;
   }
 
-  return {
+  const baseThread = {
     ...thread,
     bucket,
     awaitingSawyerReply: awaitingReply,
@@ -137,6 +173,15 @@ function reevaluateThreadState(thread: Thread, rules: RoutingRule[], manualClear
     daysSinceLastActionable,
     manuallyCleared: Boolean(manualMeta),
     originalBucket: manualMeta ? manualMeta.bucket : thread.originalBucket || null,
+  };
+
+  const actionability = evaluateThreadActionability(baseThread, actionabilityPrefs);
+
+  return {
+    ...baseThread,
+    isActionable: actionability.isActionable,
+    nonActionableReason: actionability.reason || null,
+    isMuted: actionability.isMuted,
   };
 }
 
@@ -150,7 +195,7 @@ function reducer(state: AppState, action: Action): AppState {
       return { ...state, isAuthenticated: false };
     case 'SET_THREADS': {
       const incoming = Array.isArray(action.payload) ? action.payload : [];
-      const normalized = incoming.map(thread => reevaluateThreadState(thread, state.routingRules, state.manualClearedMap));
+      const normalized = recomputeThreads(incoming, state);
       return { ...state, threads: normalized };
     }
     case 'SET_THREAD_MESSAGES': {
@@ -183,20 +228,24 @@ function reducer(state: AppState, action: Action): AppState {
         delete nextManualCleared[action.payload.id];
         persistManualCleared(nextManualCleared);
       }
-      return {
+      const updatedThreads = state.threads.map((t) =>
+        t.id === action.payload.id
+          ? {
+              ...t,
+              bucket: action.payload.bucket,
+              manuallyCleared: false,
+              originalBucket: null,
+            }
+          : t
+      );
+      const baseState = {
         ...state,
         routingRules: nextRules,
         manualClearedMap: nextManualCleared,
-        threads: state.threads.map((t) =>
-          t.id === action.payload.id
-            ? {
-                ...t,
-                bucket: action.payload.bucket,
-                manuallyCleared: false,
-                originalBucket: null,
-              }
-            : t
-        ),
+      };
+      return {
+        ...baseState,
+        threads: recomputeThreads(updatedThreads, baseState),
       };
     }
     case 'SELECT_THREAD': {
@@ -219,7 +268,7 @@ function reducer(state: AppState, action: Action): AppState {
     case 'PERFORM_SYNC':
       return {
         ...state,
-        threads: state.threads.map(t => reevaluateThreadState(t, state.routingRules, state.manualClearedMap)),
+        threads: recomputeThreads(state.threads, state),
         lastSyncTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
     case 'ADD_ROUTING_RULE':
@@ -241,13 +290,15 @@ function reducer(state: AppState, action: Action): AppState {
         nextExpanded.add(action.payload);
       }
       return { ...state, expandedBuckets: nextExpanded };
-    case 'ARCHIVE_THREAD':
+    case 'ARCHIVE_THREAD': {
+      const updatedThreads = state.threads.map((t) =>
+        t.id === action.payload ? { ...t, bucket: Bucket.CLEARED } : t
+      );
       return {
         ...state,
-        threads: state.threads.map((t) =>
-          t.id === action.payload ? { ...t, bucket: Bucket.CLEARED } : t
-        ),
+        threads: recomputeThreads(updatedThreads, state),
       };
+    }
     case 'SET_FOLLOW_UP':
       return {
         ...state,
@@ -338,10 +389,10 @@ function reducer(state: AppState, action: Action): AppState {
       }
 
       persistManualCleared(nextManual);
+      const baseState = { ...state, manualClearedMap: nextManual };
       return {
-        ...state,
-        manualClearedMap: nextManual,
-        threads: nextThreads,
+        ...baseState,
+        threads: recomputeThreads(nextThreads, baseState),
       };
     }
     case 'SET_SYNC_META':
@@ -349,6 +400,84 @@ function reducer(state: AppState, action: Action): AppState {
         ...state,
         syncMeta: action.payload,
       };
+    case 'TOGGLE_THREAD_MUTE': {
+      const threadId = action.payload.threadId;
+      const mutedThreads = { ...state.actionabilityPrefs.mutedThreads };
+      if (mutedThreads[threadId]) {
+        delete mutedThreads[threadId];
+      } else {
+        mutedThreads[threadId] = {
+          reason: action.payload.reason,
+          createdAt: new Date().toISOString(),
+        };
+      }
+      const nextPrefs: ActionabilityPrefs = {
+        ...state.actionabilityPrefs,
+        mutedThreads,
+      };
+      persistActionabilityPrefs(nextPrefs);
+      const baseState = { ...state, actionabilityPrefs: nextPrefs };
+      return {
+        ...baseState,
+        threads: recomputeThreads(state.threads, baseState, nextPrefs),
+      };
+    }
+    case 'ADD_ALLOWLIST_DOMAIN': {
+      const domain = (action.payload || '').trim().toLowerCase();
+      if (!domain) return state;
+      if (state.actionabilityPrefs.allowlistDomains.includes(domain)) return state;
+      const nextPrefs: ActionabilityPrefs = {
+        ...state.actionabilityPrefs,
+        allowlistDomains: [...state.actionabilityPrefs.allowlistDomains, domain],
+      };
+      persistActionabilityPrefs(nextPrefs);
+      const baseState = { ...state, actionabilityPrefs: nextPrefs };
+      return {
+        ...baseState,
+        threads: recomputeThreads(state.threads, baseState, nextPrefs),
+      };
+    }
+    case 'REMOVE_ALLOWLIST_DOMAIN': {
+      const domain = (action.payload || '').trim().toLowerCase();
+      const nextPrefs: ActionabilityPrefs = {
+        ...state.actionabilityPrefs,
+        allowlistDomains: state.actionabilityPrefs.allowlistDomains.filter((d) => d !== domain),
+      };
+      persistActionabilityPrefs(nextPrefs);
+      const baseState = { ...state, actionabilityPrefs: nextPrefs };
+      return {
+        ...baseState,
+        threads: recomputeThreads(state.threads, baseState, nextPrefs),
+      };
+    }
+    case 'ADD_BLOCKLIST_DOMAIN': {
+      const domain = (action.payload || '').trim().toLowerCase();
+      if (!domain) return state;
+      if (state.actionabilityPrefs.blocklistDomains.includes(domain)) return state;
+      const nextPrefs: ActionabilityPrefs = {
+        ...state.actionabilityPrefs,
+        blocklistDomains: [...state.actionabilityPrefs.blocklistDomains, domain],
+      };
+      persistActionabilityPrefs(nextPrefs);
+      const baseState = { ...state, actionabilityPrefs: nextPrefs };
+      return {
+        ...baseState,
+        threads: recomputeThreads(state.threads, baseState, nextPrefs),
+      };
+    }
+    case 'REMOVE_BLOCKLIST_DOMAIN': {
+      const domain = (action.payload || '').trim().toLowerCase();
+      const nextPrefs: ActionabilityPrefs = {
+        ...state.actionabilityPrefs,
+        blocklistDomains: state.actionabilityPrefs.blocklistDomains.filter((d) => d !== domain),
+      };
+      persistActionabilityPrefs(nextPrefs);
+      const baseState = { ...state, actionabilityPrefs: nextPrefs };
+      return {
+        ...baseState,
+        threads: recomputeThreads(state.threads, baseState, nextPrefs),
+      };
+    }
     default:
       return state;
   }
@@ -358,6 +487,13 @@ const AppContext = createContext<{
   state: AppState;
   dispatch: React.Dispatch<Action>;
 } | undefined>(undefined);
+
+const recomputeThreads = (threads: Thread[], state: AppState, prefs?: ActionabilityPrefs) => {
+  const activePrefs = prefs || state.actionabilityPrefs;
+  return threads.map((thread) =>
+    reevaluateThreadState(thread, state.routingRules, state.manualClearedMap, activePrefs)
+  );
+};
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(reducer, initialState);

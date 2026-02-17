@@ -1,5 +1,9 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClerkClient, verifyToken } from "@clerk/backend";
+import {
+  ACTIONABILITY_NO_REPLY_PATTERNS,
+  ACTIONABILITY_KEYWORD_BLOCKLIST,
+} from "../../config/actionability";
 
 type GmailThreadListResponse = {
   threads?: { id: string }[];
@@ -14,6 +18,13 @@ type ThreadMeta = {
   date: string;
   snippet: string;
   messageCount: number;
+  meta?: {
+    labelIds: string[];
+    latestExternalFrom?: string;
+    latestExternalEmail?: string;
+    latestHeaders?: Record<string, string>;
+    autoFlags?: string[];
+  };
 };
 
 const MAX_THREAD_CAP = Number(process.env.GMAIL_THREAD_CAP || 250);
@@ -87,7 +98,73 @@ function headerValue(headers: any[], name: string) {
   return h?.value || "";
 }
 
-async function fetchThreadMetas(accessToken: string, ids: string[]): Promise<ThreadMeta[]> {
+function parseEmailAddress(raw: string) {
+  if (!raw) return "";
+  const match = raw.match(/<([^>]+)>/);
+  return (match?.[1] || raw).trim().toLowerCase();
+}
+
+function headersToMap(headers: any[]): Record<string, string> {
+  return (headers || []).reduce((acc: Record<string, string>, header: any) => {
+    if (!header?.name) return acc;
+    acc[String(header.name).toLowerCase()] = String(header.value || "");
+    return acc;
+  }, {});
+}
+
+function findLatestExternalMessage(thread: any, accountEmail: string) {
+  const messages = Array.isArray(thread?.messages) ? thread.messages : [];
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    const headers = msg?.payload?.headers || [];
+    const from = headerValue(headers, "From");
+    const email = parseEmailAddress(from);
+    if (!email) continue;
+    if (accountEmail && email === accountEmail.toLowerCase()) continue;
+    return { message: msg, headers, from, email };
+  }
+  return null;
+}
+
+function autoFlagReasons({
+  headers,
+  latestEmail,
+  subject,
+  snippet,
+}: {
+  headers: Record<string, string>;
+  latestEmail: string;
+  subject: string;
+  snippet: string;
+}) {
+  const reasons: string[] = [];
+  const precedence = headers["precedence"]?.toLowerCase() || "";
+  if (precedence && /bulk|list|junk/.test(precedence)) {
+    reasons.push(`precedence:${precedence}`);
+  }
+
+  const autoSubmitted = headers["auto-submitted"]?.toLowerCase() || "";
+  if (autoSubmitted && autoSubmitted !== "no") {
+    reasons.push(`auto-submitted:${autoSubmitted}`);
+  }
+
+  if (headers["list-id"]) {
+    reasons.push("list-id");
+  }
+
+  if (latestEmail && ACTIONABILITY_NO_REPLY_PATTERNS.some((pattern) => latestEmail.includes(pattern))) {
+    reasons.push("no-reply-sender");
+  }
+
+  const haystack = `${subject} ${snippet}`.toLowerCase();
+  if (ACTIONABILITY_KEYWORD_BLOCKLIST.some((kw) => haystack.includes(kw))) {
+    reasons.push("keyword-match");
+  }
+
+  return reasons;
+}
+
+async function fetchThreadMetas(accessToken: string, ids: string[], accountEmail: string): Promise<ThreadMeta[]> {
   const metas: ThreadMeta[] = [];
 
   for (let i = 0; i < ids.length; i += THREAD_META_CONCURRENCY) {
@@ -101,16 +178,41 @@ async function fetchThreadMetas(accessToken: string, ids: string[]): Promise<Thr
       }
 
       const thread = result.value;
-      const msg0 = thread?.messages?.[0];
-      const headers = msg0?.payload?.headers || [];
+      const messages = Array.isArray(thread?.messages) ? thread.messages : [];
+      const firstMessage = messages[0];
+      const headers = firstMessage?.payload?.headers || [];
+      const latestExternal = findLatestExternalMessage(thread, accountEmail);
+      const latestHeadersMap = headersToMap(latestExternal?.headers || headers);
+      const latestEmail = latestExternal?.email || parseEmailAddress(headerValue(headers, "From"));
+      const subject = headerValue(headers, "Subject");
+      const snippet = latestExternal?.message?.snippet || firstMessage?.snippet || "";
+      const autoFlags = autoFlagReasons({
+        headers: latestHeadersMap,
+        latestEmail: latestEmail || "",
+        subject: subject || "",
+        snippet: snippet || "",
+      });
+
+      const labelIds = Array.from(
+        new Set(
+          messages.flatMap((msg: any) => (Array.isArray(msg?.labelIds) ? msg.labelIds : []))
+        )
+      );
 
       metas.push({
         id: chunk[index],
-        subject: headerValue(headers, "Subject"),
+        subject,
         from: headerValue(headers, "From"),
         date: headerValue(headers, "Date"),
-        snippet: msg0?.snippet || "",
-        messageCount: thread?.messages?.length || 0,
+        snippet,
+        messageCount: messages.length,
+        meta: {
+          labelIds,
+          latestExternalFrom: latestExternal?.from,
+          latestExternalEmail: latestEmail,
+          latestHeaders: latestHeadersMap,
+          autoFlags,
+        },
       });
     });
   }
@@ -161,8 +263,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const rangeDays = clampRangeDays(req.query.days);
     const pageSize = Math.min(Number(req.query.pageSize) || PAGE_SIZE, 200);
+    const accountEmail = (google?.email || "").toLowerCase();
 
-    const queryParts = [`newer_than:${rangeDays}d`, "category:primary", "-in:chats"];
+    const queryParts = [
+      `newer_than:${rangeDays}d`,
+      "category:primary",
+      "-category:promotions",
+      "-category:social",
+      "-category:updates",
+      "-in:spam",
+      "-in:trash",
+      "-in:chats",
+    ];
     const query = queryParts.join(" ");
 
     const ids: string[] = [];
@@ -194,7 +306,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       pageCount += 1;
     } while (nextPageToken);
 
-    const metas = await fetchThreadMetas(access_token, ids);
+    const metas = await fetchThreadMetas(access_token, ids, accountEmail);
 
     return res.status(200).json({
       connected: true,

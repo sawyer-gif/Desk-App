@@ -1,5 +1,11 @@
 
-import { Bucket, Thread, Message } from './types';
+import { Bucket, Thread, Message, ActionabilityPrefs } from './types';
+import {
+  ACTIONABILITY_NO_REPLY_PATTERNS,
+  ACTIONABILITY_KEYWORD_BLOCKLIST,
+  ACTIONABILITY_DEFAULT_ALLOWLIST,
+  ACTIONABILITY_DEFAULT_BLOCKLIST,
+} from './config/actionability';
 
 export function formatReceivedTime(timestamp: string): string {
   const date = new Date(timestamp);
@@ -92,7 +98,10 @@ export function getWaitingStatus(thread: Thread) {
 }
 
 export function isActionableThread(thread: Thread): boolean {
-  return thread.bucket !== Bucket.CLEARED && !thread.manuallyCleared;
+  if (thread.bucket === Bucket.CLEARED || thread.manuallyCleared) return false;
+  if (thread.isMuted) return false;
+  if (thread.isActionable === false) return false;
+  return true;
 }
 
 /**
@@ -103,4 +112,72 @@ export function getThreadSummary(thread: Thread): string {
     return `Inbound query from ${thread.fromName} regarding potential new project. Needs routing.`;
   }
   return `Ongoing discussion about ${thread.project}. Latest focus is on ${thread.subject.toLowerCase()}.`;
+}
+
+const normalizeDomain = (input?: string | null) => {
+  if (!input) return '';
+  const trimmed = input.trim().toLowerCase();
+  if (!trimmed) return '';
+  if (trimmed.includes('@')) {
+    return trimmed.split('@').pop() || trimmed;
+  }
+  return trimmed;
+};
+
+const uniqueDomains = (domains: string[]) => {
+  const set = new Set<string>();
+  domains.forEach((domain) => {
+    const normalized = normalizeDomain(domain);
+    if (normalized) set.add(normalized);
+  });
+  return Array.from(set);
+};
+
+export function evaluateThreadActionability(thread: Thread, prefs?: ActionabilityPrefs | null) {
+  const defaultAllow = uniqueDomains(ACTIONABILITY_DEFAULT_ALLOWLIST);
+  const defaultBlock = uniqueDomains(ACTIONABILITY_DEFAULT_BLOCKLIST);
+  const allowlist = new Set(uniqueDomains([...(prefs?.allowlistDomains || []), ...defaultAllow]));
+  const blocklist = new Set(uniqueDomains([...(prefs?.blocklistDomains || []), ...defaultBlock]));
+
+  const domain = normalizeDomain(thread.fromDomain || thread.fromEmail);
+  const latestEmail = (thread.meta?.latestExternalEmail || thread.fromEmail || '').toLowerCase();
+  const allowlisted = domain && allowlist.has(domain);
+  const muted = Boolean(prefs?.mutedThreads?.[thread.id]);
+
+  if (muted) {
+    return { isActionable: false, reason: 'muted-by-user', isMuted: true };
+  }
+
+  if (domain && blocklist.has(domain)) {
+    return { isActionable: false, reason: `domain-blocked:${domain}`, isMuted: false };
+  }
+
+  const reasons: string[] = [];
+  const meta = thread.meta || {};
+
+  if (!meta.latestExternalEmail && !allowlisted) {
+    reasons.push('no-external-message');
+  }
+
+  if (!allowlisted && latestEmail && ACTIONABILITY_NO_REPLY_PATTERNS.some((pattern) => latestEmail.includes(pattern))) {
+    reasons.push('no-reply-address');
+  }
+
+  const autoFlags = meta.autoFlags || [];
+  if (!allowlisted && autoFlags.length) {
+    reasons.push(...autoFlags);
+  }
+
+  const haystack = `${thread.subject} ${thread.snippet}`.toLowerCase();
+  if (!allowlisted && ACTIONABILITY_KEYWORD_BLOCKLIST.some((kw) => haystack.includes(kw))) {
+    reasons.push('keyword-match');
+  }
+
+  const actionable = allowlisted || reasons.length === 0;
+
+  return {
+    isActionable: actionable,
+    reason: actionable ? null : reasons[0],
+    isMuted: false,
+  };
 }

@@ -41,6 +41,14 @@ export interface RoutingRule {
   targetBucket: Bucket;
 }
 
+export interface ThreadMetaInfo {
+  labelIds?: string[];
+  latestExternalFrom?: string;
+  latestExternalEmail?: string;
+  latestHeaders?: Record<string, string>;
+  autoFlags?: string[];
+}
+
 export interface Thread {
   id: string;
   fromName: string;
@@ -72,6 +80,10 @@ export interface Thread {
   originalBucket?: Bucket | null;
   lastActionableAt?: string | null;
   daysSinceLastActionable?: number;
+  meta?: ThreadMetaInfo;
+  isActionable?: boolean;
+  nonActionableReason?: string | null;
+  isMuted?: boolean;
 }
 
 export type ViewType = 
@@ -97,6 +109,12 @@ export interface SyncMeta {
   lastUpdated: string;
 }
 
+export interface ActionabilityPrefs {
+  mutedThreads: Record<string, { reason?: string; createdAt: string }>;
+  allowlistDomains: string[];
+  blocklistDomains: string[];
+}
+
 export interface AppState {
   isAuthenticated: boolean;
   threads: Thread[];
@@ -114,6 +132,7 @@ export interface AppState {
   detailPanelWidth: number;
   isDetailPanelCollapsed: boolean;
   syncMeta: SyncMeta | null;
+  actionabilityPrefs: ActionabilityPrefs;
 }
 
 export type Action =
@@ -142,7 +161,12 @@ export type Action =
   | { type: 'SET_DETAIL_PANEL_OPEN'; payload: boolean }
   | { type: 'TOGGLE_DETAIL_PANEL' }
   | { type: 'TOGGLE_MANUAL_CLEAR'; payload: { threadId: string } }
-  | { type: 'SET_SYNC_META'; payload: SyncMeta | null };
+  | { type: 'SET_SYNC_META'; payload: SyncMeta | null }
+  | { type: 'TOGGLE_THREAD_MUTE'; payload: { threadId: string; reason?: string } }
+  | { type: 'ADD_ALLOWLIST_DOMAIN'; payload: string }
+  | { type: 'REMOVE_ALLOWLIST_DOMAIN'; payload: string }
+  | { type: 'ADD_BLOCKLIST_DOMAIN'; payload: string }
+  | { type: 'REMOVE_BLOCKLIST_DOMAIN'; payload: string };
 
 
 
