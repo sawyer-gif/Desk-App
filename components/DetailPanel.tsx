@@ -130,11 +130,39 @@ export const DetailPanel: React.FC = () => {
   const openQuestions = questions.filter(q => !answeredIds.includes(q.id));
 
   const gmailMessages = Array.isArray(currentThreadData?.messages) ? currentThreadData.messages : [];
-  const latestMessage = gmailMessages[gmailMessages.length - 1];
-  const htmlBody = (latestMessage?.htmlBody || '').trim();
-  const textBody = (latestMessage?.textBody || '').trim();
-  const sanitizedHtml = htmlBody ? DOMPurify.sanitize(htmlBody) : '';
-  const attachments = Array.isArray(latestMessage?.attachments) ? latestMessage.attachments : [];
+  const [expandedMessageIds, setExpandedMessageIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (Array.isArray(gmailMessages) && gmailMessages.length) {
+      setExpandedMessageIds(new Set([gmailMessages[gmailMessages.length - 1]?.id]));
+    } else {
+      setExpandedMessageIds(new Set());
+    }
+  }, [currentThreadData]);
+
+  const toggleMessage = (id: string) => {
+    setExpandedMessageIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const renderBody = (message: any) => {
+    const htmlBody = (message?.htmlBody || '').trim();
+    const textBody = (message?.textBody || '').trim();
+    if (htmlBody) {
+      return <div className="prose prose-sm max-w-none text-desk-text-secondary-light dark:text-desk-text-secondary-dark" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(htmlBody) }} />;
+    }
+    if (textBody) {
+      return <p className="text-[14px] leading-relaxed whitespace-pre-wrap text-desk-text-secondary-light dark:text-desk-text-secondary-dark">{textBody}</p>;
+    }
+    return <p className="text-xs text-desk-text-secondary-light/70 dark:text-desk-text-secondary-dark/70">No body content available.</p>;
+  };
 
   const handleRoute = (bucket: Bucket) => {
     dispatch({ type: 'MOVE_THREAD', payload: { id: thread.id, bucket, applyRule: alwaysRoute } });
@@ -259,12 +287,12 @@ export const DetailPanel: React.FC = () => {
           </section>
         )}
 
-        {/* Gmail Body Preview */}
+        {/* Gmail Thread Messages */}
         <section className="rounded-2xl border border-desk-text-secondary-light/20 dark:border-desk-text-secondary-dark/30 p-6 space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-[11px] font-bold uppercase tracking-[0.35em] text-desk-text-secondary-light dark:text-desk-text-secondary-dark">Gmail Body</h3>
-              <p className="text-[11px] text-desk-text-secondary-light/80 dark:text-desk-text-secondary-dark/80">Latest message pulled live</p>
+              <h3 className="text-[11px] font-bold uppercase tracking-[0.35em] text-desk-text-secondary-light dark:text-desk-text-secondary-dark">Gmail Thread</h3>
+              <p className="text-[11px] text-desk-text-secondary-light/80 dark:text-desk-text-secondary-dark/80">Readable copy of every message</p>
             </div>
             {isLoadingThread && <span className="text-[10px] text-blue-500 font-bold">Loading…</span>}
           </div>
@@ -276,35 +304,60 @@ export const DetailPanel: React.FC = () => {
             <p className="text-xs text-desk-text-secondary-light dark:text-desk-text-secondary-dark">Select a thread to load Gmail data.</p>
           )}
 
-          {currentThreadData && (
-            <>
-              <div className="min-h-[160px] rounded-xl border border-desk-text-secondary-light/10 dark:border-desk-text-secondary-dark/20 bg-black/5 dark:bg-white/5 p-4 overflow-auto">
-                {sanitizedHtml ? (
-                  <div className="prose prose-sm max-w-none text-desk-text-secondary-light dark:text-desk-text-secondary-dark" dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />
-                ) : textBody ? (
-                  <p className="text-[14px] leading-relaxed whitespace-pre-wrap text-desk-text-secondary-light dark:text-desk-text-secondary-dark">{textBody}</p>
-                ) : (
-                  <p className="text-xs text-desk-text-secondary-light/70 dark:text-desk-text-secondary-dark/70">No body content available yet.</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <h4 className="text-[11px] font-bold uppercase tracking-[0.35em] text-desk-text-secondary-light dark:text-desk-text-secondary-dark">Attachments</h4>
-                {attachments.length ? (
-                  <ul className="text-sm text-desk-text-secondary-light dark:text-desk-text-secondary-dark space-y-1">
-                    {attachments.map((attachment, idx) => (
-                      <li key={attachment.attachmentId || `${attachment.filename}-${idx}`} className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-blue-500/50" />
-                        <span>{attachment.filename || 'attachment'}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-xs text-desk-text-secondary-light/70 dark:text-desk-text-secondary-dark/70">No attachments for this message.</p>
-                )}
-              </div>
-            </>
+          {currentThreadData && gmailMessages.length === 0 && (
+            <p className="text-xs text-desk-text-secondary-light dark:text-desk-text-secondary-dark">No Gmail messages synced yet.</p>
           )}
+
+          {gmailMessages.map((message: any, index: number) => {
+            const messageId = message.id || `gmail-message-${index}`;
+            const isExpanded = expandedMessageIds.has(messageId);
+            const sentAt = message.timestamp ? new Date(message.timestamp).toLocaleString() : 'Unknown date';
+            const headerSender = message.sender || message.senderEmail || 'Unknown sender';
+            const toLine = message.to || message.recipient || '—';
+            const snippet = message.snippet || (message.textBody || '').slice(0, 140);
+            const attachments = Array.isArray(message.attachments) ? message.attachments : [];
+
+            return (
+              <div key={messageId} className="rounded-2xl border border-desk-text-secondary-light/15 dark:border-desk-text-secondary-dark/20 bg-white/5 dark:bg-white/5/20 overflow-hidden">
+                <button
+                  className="w-full flex flex-col gap-2 text-left p-4 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+                  onClick={() => toggleMessage(messageId)}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-sm font-semibold text-desk-text-primary-light dark:text-desk-text-primary-dark">{headerSender}</div>
+                    <div className="text-[11px] text-desk-text-secondary-light/70 dark:text-desk-text-secondary-dark/70">{sentAt}</div>
+                  </div>
+                  <div className="text-[11px] text-desk-text-secondary-light/80 dark:text-desk-text-secondary-dark/80">To: {toLine}</div>
+                  {message.subject && <div className="text-sm font-bold text-desk-text-primary-light dark:text-desk-text-primary-dark">{message.subject}</div>}
+                  {snippet && <p className="text-xs text-desk-text-secondary-light/80 dark:text-desk-text-secondary-dark/80 truncate">{snippet}</p>}
+                  <div className="text-[11px] font-bold uppercase tracking-[0.35em] text-blue-500">{isExpanded ? 'Hide message' : 'Show message'}</div>
+                </button>
+
+                {isExpanded && (
+                  <div className="p-4 space-y-3 border-t border-desk-text-secondary-light/10 dark:border-desk-text-secondary-dark/10">
+                    <div className="rounded-xl border border-desk-text-secondary-light/10 dark:border-desk-text-secondary-dark/20 bg-black/5 dark:bg-white/5 p-4 overflow-auto">
+                      {renderBody(message)}
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="text-[11px] font-bold uppercase tracking-[0.35em] text-desk-text-secondary-light dark:text-desk-text-secondary-dark">Attachments</h4>
+                      {attachments.length ? (
+                        <ul className="text-xs text-desk-text-secondary-light dark:text-desk-text-secondary-dark space-y-1">
+                          {attachments.map((attachment: any, attachmentIndex: number) => (
+                            <li key={attachment.attachmentId || `${messageId}-attachment-${attachmentIndex}`} className="flex items-center gap-2">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500/60" />
+                              <span>{attachment.filename || 'attachment'}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-[11px] text-desk-text-secondary-light/70 dark:text-desk-text-secondary-dark/70">No attachments</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </section>
 
         {/* Conversation Timeline */}
