@@ -62,7 +62,7 @@ const initialState: AppState = {
   isSyncing: false,
   lastSyncTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
   searchQuery: '',
-  dateRange: '30 Days',
+  dateRange: '14 Days',
   isDraftModalOpen: false,
   expandedBuckets: new Set(),
   darkMode: readBoolean(DARK_MODE_KEY),

@@ -12,7 +12,7 @@ export enum Bucket {
 
 export type ProjectStatus = 'Installation' | 'Shipping' | 'Support' | 'Change Order';
 
-export type DateRange = 'Today' | '7 Days' | '30 Days' | '60 Days';
+export type DateRange = 'Today' | '7 Days' | '14 Days' | '30 Days' | '60 Days';
 
 export interface MessageAttachment {
   filename: string;

@@ -41,6 +41,9 @@ const rangeToDays = (range: DateRange): number => {
     case '60 Days':
       return 60;
     case '30 Days':
+      return 30;
+    case '14 Days':
+      return 14;
     default:
       return 30;
   }
@@ -208,7 +211,7 @@ const connectGoogle = async () => {
         </div>
 
         <div className="flex items-center gap-1 bg-black/5 dark:bg-white/5 p-1 rounded-xl ml-4">
-          {(['Today', '7 Days', '30 Days', '60 Days'] as const).map((range) => (
+          {(['Today', '7 Days', '14 Days', '30 Days', '60 Days'] as const).map((range) => (
             <button
               key={range}
               onClick={() => handleRangeSelect(range)}
