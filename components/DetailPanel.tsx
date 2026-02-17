@@ -203,7 +203,7 @@ export const DetailPanel: React.FC = () => {
   };
 
   const handleCollapsePanel = () => {
-    dispatch({ type: 'TOGGLE_DETAIL_PANEL' });
+    dispatch({ type: 'SET_DETAIL_PANEL_OPEN', payload: false });
   };
 
   const handleManualClearToggle = () => {

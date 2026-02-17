@@ -59,8 +59,15 @@ const AppContent: React.FC = () => {
     return <LoginPage />;
   }
 
+  const handleShowPanel = () => {
+    dispatch({ type: 'SET_DETAIL_PANEL_OPEN', payload: true });
+  };
+
   const startResize = (event: React.MouseEvent<HTMLDivElement>) => {
     event.preventDefault();
+    if (state.isDetailPanelCollapsed) {
+      handleShowPanel();
+    }
     setIsResizing(true);
   };
 
@@ -87,30 +94,42 @@ const AppContent: React.FC = () => {
           </div>
           {state.isDetailPanelCollapsed && (
             <button
-              onClick={() => dispatch({ type: 'TOGGLE_DETAIL_PANEL' })}
+              onClick={handleShowPanel}
               className="absolute top-4 right-4 z-20 flex items-center gap-2 px-3 py-2 rounded-lg bg-white shadow border border-black/5 text-[12px] font-semibold text-desk-text-primary-light dark:bg-zinc-900 dark:border-white/5 dark:text-zinc-100"
             >
               <PanelRightOpen className="w-4 h-4" />
-              Show Thread
+              Open Thread
             </button>
           )}
         </div>
 
-        {!state.isDetailPanelCollapsed && (
-          <>
-            <div
-              className={`w-1.5 cursor-col-resize bg-transparent hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${isResizing ? 'bg-black/10 dark:bg-white/10' : ''}`}
-              onMouseDown={startResize}
-            >
-              <div className="w-px h-full mx-auto bg-black/10 dark:bg-white/10" />
-            </div>
-            <div style={{ width: state.detailPanelWidth }} className="h-full flex flex-col">
-              <ThreadDetailErrorBoundary>
-                <DetailPanel />
-              </ThreadDetailErrorBoundary>
-            </div>
-          </>
-        )}
+        <div
+          className={`w-1.5 cursor-col-resize bg-transparent hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${
+            isResizing ? 'bg-black/10 dark:bg-white/10' : ''
+          } ${state.isDetailPanelCollapsed ? 'opacity-70' : ''}`}
+          onMouseDown={startResize}
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize thread inspector"
+        >
+          <div className="w-px h-full mx-auto bg-black/10 dark:bg-white/10" />
+        </div>
+
+        <div
+          className="relative h-full flex-shrink-0"
+          style={{ width: state.isDetailPanelCollapsed ? 0 : state.detailPanelWidth }}
+        >
+          <div
+            className={`absolute top-0 right-0 h-full flex flex-col transition-transform duration-300 ease-out ${
+              state.isDetailPanelCollapsed ? 'translate-x-full pointer-events-none opacity-0' : 'translate-x-0 opacity-100'
+            }`}
+            style={{ width: state.detailPanelWidth }}
+          >
+            <ThreadDetailErrorBoundary>
+              <DetailPanel />
+            </ThreadDetailErrorBoundary>
+          </div>
+        </div>
       </div>
       <DraftModal />
       <BuildStamp />

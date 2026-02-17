@@ -198,8 +198,17 @@ function reducer(state: AppState, action: Action): AppState {
         ),
       };
     }
-    case 'SELECT_THREAD':
-      return { ...state, selectedThreadId: action.payload };
+    case 'SELECT_THREAD': {
+      const shouldOpenPanel = Boolean(action.payload);
+      if (shouldOpenPanel) {
+        persistDetailCollapsed(false);
+      }
+      return {
+        ...state,
+        selectedThreadId: action.payload,
+        isDetailPanelCollapsed: shouldOpenPanel ? false : state.isDetailPanelCollapsed,
+      };
+    }
     case 'SET_SYNCING':
       return { 
         ...state, 
@@ -282,6 +291,11 @@ function reducer(state: AppState, action: Action): AppState {
       const clamped = clamp(action.payload, DETAIL_PANEL_MIN_WIDTH, DETAIL_PANEL_MAX_WIDTH);
       persistDetailWidth(clamped);
       return { ...state, detailPanelWidth: clamped };
+    }
+    case 'SET_DETAIL_PANEL_OPEN': {
+      const nextCollapsed = !action.payload;
+      persistDetailCollapsed(nextCollapsed);
+      return { ...state, isDetailPanelCollapsed: nextCollapsed };
     }
     case 'TOGGLE_DETAIL_PANEL': {
       const next = !state.isDetailPanelCollapsed;

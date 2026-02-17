@@ -126,6 +126,7 @@ export type Action =
   | { type: 'TOGGLE_QUESTION_ANSWERED'; payload: { threadId: string; messageId: string } }
   | { type: 'SET_LAST_SYNC_TIME'; payload: string }
   | { type: 'SET_DETAIL_PANEL_WIDTH'; payload: number }
+  | { type: 'SET_DETAIL_PANEL_OPEN'; payload: boolean }
   | { type: 'TOGGLE_DETAIL_PANEL' }
   | { type: 'TOGGLE_MANUAL_CLEAR'; payload: { threadId: string } };
 
