@@ -239,18 +239,34 @@ const REQUIRED_ENV_VARS = [
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const requestId = `gmail-sync-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const respond = (status: number, body: Record<string, any>) => res.status(status).json({ requestId, ...body });
+  const envDebug = {
+    runtime: process.env.VERCEL ? "vercel" : "node",
+    hasClerkSecret: Boolean(process.env.CLERK_SECRET_KEY),
+    hasGoogleClientId: Boolean(process.env.GOOGLE_CLIENT_ID),
+    hasGoogleClientSecret: Boolean(process.env.GOOGLE_CLIENT_SECRET),
+    hasRedirectUri: Boolean(process.env.GOOGLE_REDIRECT_URI),
+  };
+  const respond = (status: number, body: Record<string, any>) =>
+    res
+      .status(status)
+      .json({ requestId, debug: envDebug, ...body });
   const log = (message: string, extra?: Record<string, any>) =>
     console.log(`[Desk][gmail-threads][${requestId}] ${message}`, extra || {});
 
   try {
-    if (req.method !== "GET") return res.status(405).send("Method not allowed");
+    if (req.method !== "GET") {
+      return respond(405, {
+        ok: false,
+        code: "METHOD_NOT_ALLOWED",
+        message: "Only GET supported.",
+      });
+    }
 
-    const authHeaderRaw = req.headers && typeof req.headers.authorization === 'string'
+    const authHeaderRaw = req.headers && typeof req.headers.authorization === "string"
       ? req.headers.authorization
-      : (req.headers && typeof (req.headers as any).Authorization === 'string'
-          ? (req.headers as any).Authorization
-          : "");
+      : (req.headers && typeof (req.headers as any).Authorization === "string"
+        ? (req.headers as any).Authorization
+        : "");
     const token = authHeaderRaw.startsWith("Bearer ") ? authHeaderRaw.slice(7) : "";
     const hasAuthHeader = Boolean(token);
     const daysParam = req.query.days;
@@ -269,9 +285,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       log("missing-env", { missing: ["CLERK_SECRET_KEY"] });
       return respond(500, {
         ok: false,
-        code: "CONFIG_ERROR",
-        missing: ["CLERK_SECRET_KEY"],
-        message: "Missing required env.",
+        code: "MISSING_ENV",
+        message: "Missing server env vars",
       });
     }
 
@@ -301,9 +316,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       log("missing-env", { missing: remainingMissing });
       return respond(500, {
         ok: false,
-        code: "CONFIG_ERROR",
-        missing: remainingMissing,
-        message: "Missing required env.",
+        code: "MISSING_ENV",
+        message: "Missing server env vars",
       });
     }
 
@@ -314,15 +328,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const refreshToken = google?.refresh_token;
 
     if (!google?.connected) {
-      return respond(200, { ok: true, connected: false, threads: [] });
+      return respond(403, {
+        ok: false,
+        code: "GOOGLE_NOT_CONNECTED",
+        message: "Connect Google to sync.",
+      });
     }
     if (!refreshToken) {
-      return respond(200, {
-        ok: true,
-        connected: true,
-        needsReconnect: true,
-        threads: [],
-        message: "Reconnect Gmail to issue a refresh token.",
+      return respond(403, {
+        ok: false,
+        code: "GOOGLE_NOT_CONNECTED",
+        message: "Connect Google to sync.",
       });
     }
 
@@ -434,7 +450,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     });
   } catch (e: any) {
-    log("sync-failed", { message: e?.message });
+    log("sync-failed", {
+      error: e?.name,
+      message: e?.message,
+      stack: typeof e?.stack === "string" ? e.stack.split("\n")[0]?.trim() : undefined,
+    });
     const detail = typeof e?.message === "string" ? e.message : "Unknown error";
     return respond(500, {
       ok: false,

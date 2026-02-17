@@ -124,14 +124,17 @@ export const Header: React.FC = () => {
       const data = await res.json().catch(() => null);
 
       if (!res.ok || data?.ok === false) {
+        console.error('[Desk] Sync error', { status: res.status, body: data });
         if ((res.status === 401 || data?.code === 'AUTH_REQUIRED')) {
           alert('Connect Google to sync your inbox. Use the Connect Google button to link your account.');
           return;
         }
-        const code = data?.code || res.status;
-        const requestId = data?.requestId ? ` (ref ${data.requestId})` : '';
-        const message = data?.message || 'Sync failed.';
-        throw new Error(`${message} [${code}]${requestId}`);
+        if ((res.status === 403 || data?.code === 'GOOGLE_NOT_CONNECTED')) {
+          alert('Google account not connected. Use the Connect Google button to link your account.');
+          return;
+        }
+        alert(`Sync failed (${res.status}). See console for details.`);
+        return;
       }
 
       const normalizedThreads = normalizeThreads(data?.threads ?? []);
