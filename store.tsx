@@ -69,6 +69,7 @@ const initialState: AppState = {
   manualClearedMap: loadManualCleared(),
   detailPanelWidth: clamp(readNumber(DETAIL_WIDTH_KEY, DEFAULT_DETAIL_PANEL_WIDTH), DETAIL_PANEL_MIN_WIDTH, DETAIL_PANEL_MAX_WIDTH),
   isDetailPanelCollapsed: readBoolean(DETAIL_COLLAPSE_KEY, false),
+  syncMeta: null,
 };
 
 function computeActionableMeta(thread: Thread) {
@@ -343,6 +344,11 @@ function reducer(state: AppState, action: Action): AppState {
         threads: nextThreads,
       };
     }
+    case 'SET_SYNC_META':
+      return {
+        ...state,
+        syncMeta: action.payload,
+      };
     default:
       return state;
   }

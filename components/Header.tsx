@@ -2,7 +2,7 @@ import React from 'react';
 import { useAuth } from "@clerk/clerk-react";
 import { useAppState } from '../store';
 import { Search, RefreshCw, ChevronLeft, Moon, Sun, LogOut } from 'lucide-react';
-import { Bucket, Priority, Thread } from '../types';
+import { Bucket, Priority, Thread, DateRange } from '../types';
 
 const parseEmailAddress = (raw: string) => {
   if (!raw) return { name: '', email: '' };
@@ -30,6 +30,20 @@ const inferBucket = (email: string) => {
   if (normalized.includes('@marioromano.com')) return Bucket.INTERNAL;
   if (normalized.includes('@mrwalls')) return Bucket.INTERNAL;
   return Bucket.SALES;
+};
+
+const rangeToDays = (range: DateRange): number => {
+  switch (range) {
+    case 'Today':
+      return 1;
+    case '7 Days':
+      return 7;
+    case '60 Days':
+      return 60;
+    case '30 Days':
+    default:
+      return 30;
+  }
 };
 
 const normalizeThreads = (threads: any[]): Thread[] => {
@@ -77,14 +91,24 @@ export const Header: React.FC = () => {
   const { state, dispatch } = useAppState();
   const { getToken } = useAuth();
 
-  const handleSync = async () => {
+  const handleSync = async (rangeOverride?: DateRange) => {
+    if (state.isSyncing) return;
+
+    const activeRange = rangeOverride ?? state.dateRange ?? '30 Days';
+    const rangeDays = rangeToDays(activeRange);
+
     try {
       dispatch({ type: "SET_SYNCING", payload: true });
 
       const token = await getToken();
       if (!token) throw new Error("No Clerk session token found");
 
-      const res = await fetch("/api/google/gmail-threads?ts=" + Date.now(), {
+      const params = new URLSearchParams({
+        ts: Date.now().toString(),
+        days: String(rangeDays),
+      });
+
+      const res = await fetch(`/api/google/gmail-threads?${params.toString()}`, {
         method: "GET",
         headers: { Authorization: `Bearer ${token}` },
         cache: "no-store",
@@ -103,6 +127,20 @@ export const Header: React.FC = () => {
       dispatch({
         type: "SET_LAST_SYNC_TIME",
         payload: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      });
+      dispatch({
+        type: 'SET_SYNC_META',
+        payload: {
+          range: activeRange,
+          rangeDays,
+          totalFetched: data?.meta?.totalFetched ?? normalizedThreads.length,
+          pages: data?.meta?.pages ?? 1,
+          pageSize: data?.meta?.pageSize ?? 0,
+          capped: Boolean(data?.meta?.capped),
+          primaryOnly: Boolean(data?.meta?.primaryOnly),
+          estimate: data?.meta?.estimate,
+          lastUpdated: new Date().toISOString(),
+        },
       });
     } catch (err) {
       console.error(err);
@@ -144,6 +182,13 @@ const connectGoogle = async () => {
   }
 };
 
+  const handleRangeSelect = (range: DateRange) => {
+    dispatch({ type: 'SET_DATE_RANGE', payload: range });
+    if (!state.isSyncing) {
+      handleSync(range);
+    }
+  };
+
   const isDashboard = state.currentView.type === 'DASHBOARD';
 
   return (
@@ -166,7 +211,7 @@ const connectGoogle = async () => {
           {(['Today', '7 Days', '30 Days', '60 Days'] as const).map((range) => (
             <button
               key={range}
-              onClick={() => dispatch({ type: 'SET_DATE_RANGE', payload: range })}
+              onClick={() => handleRangeSelect(range)}
               className={`px-3 py-1 text-[11px] font-bold rounded-lg transition-all ${
                 state.dateRange === range 
                   ? 'bg-desk-surface-light shadow-sm text-desk-text-primary-light dark:bg-white/10 dark:text-desk-text-primary-dark' 
@@ -218,11 +263,7 @@ const connectGoogle = async () => {
         </button>
 
         <button
-          onClick={() => {
-          alert("SYNC CLICKED");
-          handleSync();
-      }}
-
+          onClick={() => handleSync()}
           disabled={state.isSyncing}
           className="bg-desk-text-primary-light dark:bg-desk-text-primary-dark dark:text-desk-surface-dark text-desk-surface-light px-4 py-2 rounded-xl text-[12px] font-bold hover:opacity-90 active:scale-95 transition-all flex items-center gap-2 disabled:bg-desk-text-secondary-light/30"
         >

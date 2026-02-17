@@ -20,6 +20,9 @@ export const FocusActionView: React.FC = () => {
   // Guard: prevent blank-screen if threads is ever undefined/non-array
 const threads: Thread[] = Array.isArray((state as any).threads) ? ((state as any).threads as Thread[]) : [];
 const actionable = threads.filter(isActionableThread);
+const actionableCount = actionable.length;
+const totalThreads = threads.length;
+const syncMeta = state.syncMeta;
 
 
   // Logic: 
@@ -106,6 +109,38 @@ const actionable = threads.filter(isActionableThread);
 
       <div className="flex-1 overflow-y-auto px-8 py-12">
         <div className="max-w-[850px] mx-auto w-full">
+          <div className="mb-10 rounded-3xl border border-zinc-100 dark:border-zinc-800 bg-white/70 dark:bg-zinc-900/60 px-6 py-5 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-6">
+              <div>
+                <p className="text-[11px] font-semibold tracking-[0.25em] uppercase text-[#86868B] dark:text-zinc-400">
+                  Primary Inbox · {syncMeta?.range ?? state.dateRange}
+                </p>
+                {state.isSyncing ? (
+                  <p className="mt-2 text-[13px] font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-2">
+                    <span className="inline-flex h-2.5 w-2.5 rounded-full bg-blue-500 animate-pulse" />
+                    Loading more…
+                  </p>
+                ) : (
+                  <p className="mt-2 text-[13px] text-[#424245] dark:text-zinc-300">
+                    {syncMeta
+                      ? `Loaded ${syncMeta.totalFetched} threads across ${syncMeta.pages} page${syncMeta.pages === 1 ? '' : 's'} (${syncMeta.rangeDays} day window)`
+                      : 'Run a sync to pull Primary inbox threads'}
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-6 text-[12px] font-semibold text-[#424245] dark:text-zinc-200">
+                <span>{actionableCount} actionable</span>
+                <span>{totalThreads} total</span>
+                <span>Last sync {state.lastSyncTime}</span>
+              </div>
+            </div>
+            {!state.isSyncing && syncMeta?.capped && (
+              <p className="mt-3 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                Showing the first {syncMeta.totalFetched} threads (cap reached). Narrow the range to pull fewer pages.
+              </p>
+            )}
+          </div>
+
           {renderSection('do-now', 'Do Now', <Zap />, doNow, 'bg-red-500')}
           {renderSection('needs-reply', 'Needs Reply', <Inbox />, needsReply, 'bg-blue-500')}
           {renderSection('follow-ups', 'Follow-Ups', <Bell />, followUps, 'bg-amber-500')}

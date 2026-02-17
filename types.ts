@@ -85,6 +85,18 @@ export interface ManualClearedMap {
   };
 }
 
+export interface SyncMeta {
+  range: DateRange;
+  rangeDays: number;
+  totalFetched: number;
+  pages: number;
+  pageSize: number;
+  capped: boolean;
+  primaryOnly: boolean;
+  estimate?: number;
+  lastUpdated: string;
+}
+
 export interface AppState {
   isAuthenticated: boolean;
   threads: Thread[];
@@ -101,6 +113,7 @@ export interface AppState {
   manualClearedMap: ManualClearedMap;
   detailPanelWidth: number;
   isDetailPanelCollapsed: boolean;
+  syncMeta: SyncMeta | null;
 }
 
 export type Action =
@@ -128,7 +141,8 @@ export type Action =
   | { type: 'SET_DETAIL_PANEL_WIDTH'; payload: number }
   | { type: 'SET_DETAIL_PANEL_OPEN'; payload: boolean }
   | { type: 'TOGGLE_DETAIL_PANEL' }
-  | { type: 'TOGGLE_MANUAL_CLEAR'; payload: { threadId: string } };
+  | { type: 'TOGGLE_MANUAL_CLEAR'; payload: { threadId: string } }
+  | { type: 'SET_SYNC_META'; payload: SyncMeta | null };
 
 
 
