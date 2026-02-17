@@ -243,17 +243,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const log = (message: string, extra?: Record<string, any>) =>
     console.log(`[Desk][gmail-threads][${requestId}] ${message}`, extra || {});
 
-  const missing = REQUIRED_ENV_VARS.filter((key) => !process.env[key]);
-  if (missing.length) {
-    log("missing-env", { missing });
-    return respond(500, {
-      ok: false,
-      code: "CONFIG_ERROR",
-      missing,
-      message: "Missing required env.",
-    });
-  }
-
   try {
     if (req.method !== "GET") return res.status(405).send("Method not allowed");
 
@@ -271,7 +260,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    const clerkSecret = process.env.CLERK_SECRET_KEY as string;
+    const clerkSecret = process.env.CLERK_SECRET_KEY;
+    if (!clerkSecret) {
+      log("missing-env", { missing: ["CLERK_SECRET_KEY"] });
+      return respond(500, {
+        ok: false,
+        code: "CONFIG_ERROR",
+        missing: ["CLERK_SECRET_KEY"],
+        message: "Missing required env.",
+      });
+    }
 
     let verified;
     try {
@@ -291,6 +289,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ok: false,
         code: "AUTH_REQUIRED",
         message: "Connect Google to sync.",
+      });
+    }
+
+    const remainingMissing = REQUIRED_ENV_VARS.filter((key) => key !== "CLERK_SECRET_KEY" && !process.env[key]);
+    if (remainingMissing.length) {
+      log("missing-env", { missing: remainingMissing });
+      return respond(500, {
+        ok: false,
+        code: "CONFIG_ERROR",
+        missing: remainingMissing,
+        message: "Missing required env.",
       });
     }
 
