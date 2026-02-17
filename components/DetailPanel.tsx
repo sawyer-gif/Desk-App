@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAppState } from '../store';
 import { Bucket, Priority } from '../types';
@@ -129,16 +129,33 @@ export const DetailPanel: React.FC = () => {
   const questions = detectSawyerQuestions(messages) || [];
   const openQuestions = questions.filter(q => !answeredIds.includes(q.id));
 
-  const gmailMessages = Array.isArray(currentThreadData?.messages) ? currentThreadData.messages : [];
+  const gmailMessagesRaw = Array.isArray(currentThreadData?.messages) ? currentThreadData.messages : [];
+  const threadMessages = useMemo(() => {
+    if (gmailMessagesRaw.length) {
+      return gmailMessagesRaw;
+    }
+    return messages.map((msg, idx) => ({
+      id: msg.id || `fallback-${idx}`,
+      sender: msg.sender,
+      senderEmail: msg.senderEmail,
+      to: msg.to,
+      subject: msg.subject,
+      snippet: msg.snippet || msg.content,
+      textBody: msg.content,
+      timestamp: msg.timestamp,
+      attachments: [],
+    }));
+  }, [gmailMessagesRaw, messages]);
   const [expandedMessageIds, setExpandedMessageIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    if (Array.isArray(gmailMessages) && gmailMessages.length) {
-      setExpandedMessageIds(new Set([gmailMessages[gmailMessages.length - 1]?.id]));
+    if (threadMessages.length) {
+      const last = threadMessages[threadMessages.length - 1];
+      setExpandedMessageIds(new Set([last?.id || `thread-message-${threadMessages.length - 1}`]));
     } else {
       setExpandedMessageIds(new Set());
     }
-  }, [currentThreadData]);
+  }, [threadMessages]);
 
   const toggleMessage = (id: string) => {
     setExpandedMessageIds(prev => {
@@ -155,11 +172,15 @@ export const DetailPanel: React.FC = () => {
   const renderBody = (message: any) => {
     const htmlBody = (message?.htmlBody || '').trim();
     const textBody = (message?.textBody || '').trim();
+    const fallbackBody = (message?.content || '').trim();
     if (htmlBody) {
       return <div className="prose prose-sm max-w-none text-desk-text-secondary-light dark:text-desk-text-secondary-dark" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(htmlBody) }} />;
     }
     if (textBody) {
       return <p className="text-[14px] leading-relaxed whitespace-pre-wrap text-desk-text-secondary-light dark:text-desk-text-secondary-dark">{textBody}</p>;
+    }
+    if (fallbackBody) {
+      return <p className="text-[14px] leading-relaxed whitespace-pre-wrap text-desk-text-secondary-light dark:text-desk-text-secondary-dark">{fallbackBody}</p>;
     }
     return <p className="text-xs text-desk-text-secondary-light/70 dark:text-desk-text-secondary-dark/70">No body content available.</p>;
   };
@@ -304,17 +325,17 @@ export const DetailPanel: React.FC = () => {
             <p className="text-xs text-desk-text-secondary-light dark:text-desk-text-secondary-dark">Select a thread to load Gmail data.</p>
           )}
 
-          {currentThreadData && gmailMessages.length === 0 && (
+          {currentThreadData && gmailMessagesRaw.length === 0 && (
             <p className="text-xs text-desk-text-secondary-light dark:text-desk-text-secondary-dark">No Gmail messages synced yet.</p>
           )}
 
-          {gmailMessages.map((message: any, index: number) => {
-            const messageId = message.id || `gmail-message-${index}`;
+          {threadMessages.map((message: any, index: number) => {
+            const messageId = message.id || `thread-message-${index}`;
             const isExpanded = expandedMessageIds.has(messageId);
             const sentAt = message.timestamp ? new Date(message.timestamp).toLocaleString() : 'Unknown date';
             const headerSender = message.sender || message.senderEmail || 'Unknown sender';
-            const toLine = message.to || message.recipient || '—';
-            const snippet = message.snippet || (message.textBody || '').slice(0, 140);
+            const toLine = message.to || message.recipient || message.toAddress || '—';
+            const snippet = message.snippet || message.content || (message.textBody || '').slice(0, 140);
             const attachments = Array.isArray(message.attachments) ? message.attachments : [];
 
             return (
