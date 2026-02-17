@@ -246,11 +246,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     if (req.method !== "GET") return res.status(405).send("Method not allowed");
 
-    const authHeader = req.headers.authorization || "";
-    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+    const authHeaderRaw = req.headers && typeof req.headers.authorization === 'string'
+      ? req.headers.authorization
+      : (req.headers && typeof (req.headers as any).Authorization === 'string'
+          ? (req.headers as any).Authorization
+          : "");
+    const token = authHeaderRaw.startsWith("Bearer ") ? authHeaderRaw.slice(7) : "";
     const hasAuthHeader = Boolean(token);
     const daysParam = req.query.days;
-    log("request:start", { authHeader: hasAuthHeader, daysParam });
+    log("request:start", { hasAuthHeader, daysParam });
 
     if (!token) {
       return respond(401, {
