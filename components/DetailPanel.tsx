@@ -6,6 +6,7 @@ import { Badge, PriorityBadge } from './Badge';
 import { X, ExternalLink, MessageSquare, History, ChevronDown, Pin, AtSign, CheckCircle2, ChevronUp } from 'lucide-react';
 import { formatReceivedTime, detectSawyerQuestions, getThreadSummary } from '../utils';
 import { useAuth } from '@clerk/clerk-react';
+import DOMPurify from 'dompurify';
 
 const CATEGORY_DEFINITIONS: Record<string, string> = {
   Sales: "Pre-commitment: leads, quotes, proposals, bids, samples, renderings.",
@@ -127,6 +128,13 @@ export const DetailPanel: React.FC = () => {
   const answeredIds = Array.isArray(thread.answeredQuestionIds) ? thread.answeredQuestionIds : [];
   const questions = detectSawyerQuestions(messages) || [];
   const openQuestions = questions.filter(q => !answeredIds.includes(q.id));
+
+  const gmailMessages = Array.isArray(currentThreadData?.messages) ? currentThreadData.messages : [];
+  const latestMessage = gmailMessages[gmailMessages.length - 1];
+  const htmlBody = (latestMessage?.htmlBody || '').trim();
+  const textBody = (latestMessage?.textBody || '').trim();
+  const sanitizedHtml = htmlBody ? DOMPurify.sanitize(htmlBody) : '';
+  const attachments = Array.isArray(latestMessage?.attachments) ? latestMessage.attachments : [];
 
   const handleRoute = (bucket: Bucket) => {
     dispatch({ type: 'MOVE_THREAD', payload: { id: thread.id, bucket, applyRule: alwaysRoute } });
@@ -251,22 +259,51 @@ export const DetailPanel: React.FC = () => {
           </section>
         )}
 
-        {/* Raw Gmail Payload */}
-        <section className="border border-dashed border-desk-text-secondary-light/30 dark:border-desk-text-secondary-dark/30 rounded-2xl p-4">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-[11px] font-bold uppercase tracking-widest text-desk-text-secondary-light dark:text-desk-text-secondary-dark">Live Gmail Payload</h3>
+        {/* Gmail Body Preview */}
+        <section className="rounded-2xl border border-desk-text-secondary-light/20 dark:border-desk-text-secondary-dark/30 p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-[11px] font-bold uppercase tracking-[0.35em] text-desk-text-secondary-light dark:text-desk-text-secondary-dark">Gmail Body</h3>
+              <p className="text-[11px] text-desk-text-secondary-light/80 dark:text-desk-text-secondary-dark/80">Latest message pulled live</p>
+            </div>
             {isLoadingThread && <span className="text-[10px] text-blue-500 font-bold">Loading…</span>}
           </div>
+
           {threadError && (
             <p className="text-xs text-red-500 font-semibold">{threadError}</p>
           )}
           {!threadError && !currentThreadData && !isLoadingThread && (
             <p className="text-xs text-desk-text-secondary-light dark:text-desk-text-secondary-dark">Select a thread to load Gmail data.</p>
           )}
+
           {currentThreadData && (
-            <pre className="text-[11px] leading-snug whitespace-pre-wrap break-all text-desk-text-secondary-light dark:text-desk-text-secondary-dark bg-black/5 dark:bg-white/5 rounded-xl p-3 overflow-auto max-h-[240px]">
-              {JSON.stringify(currentThreadData, null, 2)}
-            </pre>
+            <>
+              <div className="min-h-[160px] rounded-xl border border-desk-text-secondary-light/10 dark:border-desk-text-secondary-dark/20 bg-black/5 dark:bg-white/5 p-4 overflow-auto">
+                {sanitizedHtml ? (
+                  <div className="prose prose-sm max-w-none text-desk-text-secondary-light dark:text-desk-text-secondary-dark" dangerouslySetInnerHTML={{ __html: sanitizedHtml }} />
+                ) : textBody ? (
+                  <p className="text-[14px] leading-relaxed whitespace-pre-wrap text-desk-text-secondary-light dark:text-desk-text-secondary-dark">{textBody}</p>
+                ) : (
+                  <p className="text-xs text-desk-text-secondary-light/70 dark:text-desk-text-secondary-dark/70">No body content available yet.</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="text-[11px] font-bold uppercase tracking-[0.35em] text-desk-text-secondary-light dark:text-desk-text-secondary-dark">Attachments</h4>
+                {attachments.length ? (
+                  <ul className="text-sm text-desk-text-secondary-light dark:text-desk-text-secondary-dark space-y-1">
+                    {attachments.map((attachment, idx) => (
+                      <li key={attachment.attachmentId || `${attachment.filename}-${idx}`} className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-blue-500/50" />
+                        <span>{attachment.filename || 'attachment'}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-desk-text-secondary-light/70 dark:text-desk-text-secondary-dark/70">No attachments for this message.</p>
+                )}
+              </div>
+            </>
           )}
         </section>
 
