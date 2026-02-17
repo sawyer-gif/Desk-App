@@ -1,6 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Route, Routes, useParams } from 'react-router-dom';
-import { AppProvider, useAppState } from './store';
+import { AppProvider, useAppState, DETAIL_PANEL_MIN_WIDTH, DETAIL_PANEL_MAX_WIDTH } from './store';
 import { Header } from './components/Header';
 import { DetailPanel } from './components/DetailPanel';
 import { DraftModal } from './components/DraftModal';
@@ -11,12 +11,16 @@ import { LoginPage } from './components/LoginPage';
 import { useAuth } from "@clerk/clerk-react";
 import { ThreadDetailErrorBoundary } from './components/ThreadDetailErrorBoundary';
 import { BuildStamp } from './components/BuildStamp';
+import { PanelRightOpen } from 'lucide-react';
 
+const clampDetailWidth = (value: number) =>
+  Math.max(DETAIL_PANEL_MIN_WIDTH, Math.min(value, DETAIL_PANEL_MAX_WIDTH));
 
 const AppContent: React.FC = () => {
   const { state, dispatch } = useAppState();
   const { isSignedIn } = useAuth();
   const { threadId } = useParams<{ threadId?: string }>();
+  const [isResizing, setIsResizing] = useState(false);
 
   useEffect(() => {
     if (threadId && state.selectedThreadId !== threadId) {
@@ -32,10 +36,33 @@ const AppContent: React.FC = () => {
     }
   }, []);
 
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const nextWidth = clampDetailWidth(window.innerWidth - event.clientX);
+      dispatch({ type: 'SET_DETAIL_PANEL_WIDTH', payload: nextWidth });
+    };
+
+    const handleMouseUp = () => setIsResizing(false);
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing, dispatch]);
+
   if (!isSignedIn) {
     return <LoginPage />;
   }
 
+  const startResize = (event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsResizing(true);
+  };
 
   const renderView = () => {
     switch (state.currentView.type) {
@@ -53,18 +80,39 @@ const AppContent: React.FC = () => {
   return (
     <>
       <div className="flex h-screen bg-desk-bg-light dark:bg-desk-bg-dark overflow-hidden text-desk-text-primary-light dark:text-desk-text-primary-dark transition-colors duration-500">
-        <div className="flex-1 flex flex-col h-full overflow-hidden">
+        <div className="flex-1 flex flex-col h-full overflow-hidden relative">
           <Header />
           <div className="flex-1 overflow-y-auto overflow-x-hidden">
             {renderView()}
           </div>
+          {state.isDetailPanelCollapsed && (
+            <button
+              onClick={() => dispatch({ type: 'TOGGLE_DETAIL_PANEL' })}
+              className="absolute top-4 right-4 z-20 flex items-center gap-2 px-3 py-2 rounded-lg bg-white shadow border border-black/5 text-[12px] font-semibold text-desk-text-primary-light dark:bg-zinc-900 dark:border-white/5 dark:text-zinc-100"
+            >
+              <PanelRightOpen className="w-4 h-4" />
+              Show Thread
+            </button>
+          )}
         </div>
 
-        <ThreadDetailErrorBoundary>
-          <DetailPanel />
-        </ThreadDetailErrorBoundary>
-        <DraftModal />
+        {!state.isDetailPanelCollapsed && (
+          <>
+            <div
+              className={`w-1.5 cursor-col-resize bg-transparent hover:bg-black/10 dark:hover:bg-white/10 transition-colors ${isResizing ? 'bg-black/10 dark:bg-white/10' : ''}`}
+              onMouseDown={startResize}
+            >
+              <div className="w-px h-full mx-auto bg-black/10 dark:bg-white/10" />
+            </div>
+            <div style={{ width: state.detailPanelWidth }} className="h-full flex flex-col">
+              <ThreadDetailErrorBoundary>
+                <DetailPanel />
+              </ThreadDetailErrorBoundary>
+            </div>
+          </>
+        )}
       </div>
+      <DraftModal />
       <BuildStamp />
     </>
   );

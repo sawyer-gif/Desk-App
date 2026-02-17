@@ -4,15 +4,16 @@ import { Thread, Bucket } from '../types';
 import { useAppState } from '../store';
 import { ThreadTile } from './ThreadTile';
 import { ChevronDown, ChevronUp } from 'lucide-react';
+import { getWaitingStatus } from '../utils';
 
 export const BucketModule: React.FC<{ bucket: Bucket; threads: Thread[] }> = ({ bucket, threads }) => {
   const { state, dispatch } = useAppState();
   const isExpanded = state.expandedBuckets.has(bucket);
   const visibleThreads = isExpanded ? threads : threads.slice(0, 3);
 
-  const waitingThreads = threads.filter(t => t.awaitingSawyerReply);
+  const waitingThreads = threads.filter(t => getWaitingStatus(t).showWaiting);
   const oldestWaiting = waitingThreads.length > 0 
-    ? Math.max(...waitingThreads.map(t => t.daysUnresponded)) 
+    ? Math.max(...waitingThreads.map(t => getWaitingStatus(t).waitingDays)) 
     : null;
 
   return (

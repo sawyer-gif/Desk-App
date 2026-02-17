@@ -65,6 +65,10 @@ const normalizeThreads = (threads: any[]): Thread[] => {
       pinned: false,
       hasAttachments: false,
       answeredQuestionIds: [],
+      manuallyCleared: false,
+      originalBucket: null,
+      lastActionableAt: inboundDate.toISOString(),
+      daysSinceLastActionable: 0,
     } as Thread;
   });
 };

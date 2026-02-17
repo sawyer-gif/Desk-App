@@ -50,7 +50,11 @@ export const MOCK_THREADS: Thread[] = [
     daysUnresponded: 0,
     followUpAt: null,
     hasAttachments: true,
-    answeredQuestionIds: []
+    answeredQuestionIds: [],
+    manuallyCleared: false,
+    originalBucket: null,
+    lastActionableAt: subtractHours(4),
+    daysSinceLastActionable: 0
   },
   {
     id: 't2',
@@ -81,7 +85,11 @@ export const MOCK_THREADS: Thread[] = [
     awaitingSawyerReply: true,
     daysUnresponded: 5,
     followUpAt: subtractDays(-1),
-    answeredQuestionIds: []
+    answeredQuestionIds: [],
+    manuallyCleared: false,
+    originalBucket: null,
+    lastActionableAt: subtractDays(5),
+    daysSinceLastActionable: 5
   },
   {
     id: 't3',
@@ -110,7 +118,11 @@ export const MOCK_THREADS: Thread[] = [
     awaitingSawyerReply: true,
     daysUnresponded: 2,
     followUpAt: null,
-    answeredQuestionIds: []
+    answeredQuestionIds: [],
+    manuallyCleared: false,
+    originalBucket: null,
+    lastActionableAt: subtractDays(2),
+    daysSinceLastActionable: 2
   },
   {
     id: 't7',
@@ -139,6 +151,10 @@ export const MOCK_THREADS: Thread[] = [
     daysUnresponded: 0,
     followUpAt: null,
     hasAttachments: false,
-    answeredQuestionIds: []
+    answeredQuestionIds: [],
+    manuallyCleared: false,
+    originalBucket: null,
+    lastActionableAt: subtractHours(2),
+    daysSinceLastActionable: 0
   }
 ];

@@ -4,6 +4,7 @@ import { Bucket, Thread } from '../types';
 import { ArrowUpRight, AlertCircle, Clock, CheckCircle2 } from 'lucide-react';
 import { UnassignedSection } from './UnassignedSection';
 import { useAuth } from "@clerk/clerk-react";
+import { getWaitingStatus, isActionableThread } from '../utils';
 
 
 export const DashboardView: React.FC = () => {
@@ -13,14 +14,16 @@ export const DashboardView: React.FC = () => {
 
   const getMetrics = (bucketThreads: Thread[]) => {
     const awaiting = bucketThreads.filter(t => t.awaitingSawyerReply);
-    const overdue = awaiting.filter(t => t.daysUnresponded >= 4);
-    const oldest = awaiting.length > 0 ? Math.max(...awaiting.map(t => t.daysUnresponded)) : 0;
+    const overdue = bucketThreads.filter(t => getWaitingStatus(t).isOverdue);
+    const waitingPool = bucketThreads.filter(t => getWaitingStatus(t).showWaiting);
+    const oldest = waitingPool.length > 0 ? Math.max(...waitingPool.map(t => getWaitingStatus(t).waitingDays)) : 0;
     return { count: bucketThreads.length, awaiting: awaiting.length, overdue: overdue.length, oldest };
   };
 
-  const actionableThreads = state.threads.filter(t => t.awaitingSawyerReply && t.bucket !== Bucket.CLEARED && t.bucket !== Bucket.UNASSIGNED);
-  const overdueCount = actionableThreads.filter(t => t.daysUnresponded >= 4).length;
-  const oldestWaiting = actionableThreads.length > 0 ? Math.max(...actionableThreads.map(t => t.daysUnresponded)) : 0;
+  const actionableThreads = state.threads.filter(t => t.bucket !== Bucket.UNASSIGNED && isActionableThread(t));
+  const overdueCount = actionableThreads.filter(t => getWaitingStatus(t).isOverdue).length;
+  const waitingPool = actionableThreads.filter(t => getWaitingStatus(t).showWaiting);
+  const oldestWaiting = waitingPool.length > 0 ? Math.max(...waitingPool.map(t => getWaitingStatus(t).waitingDays)) : 0;
 
   const unassigned = state.threads.filter(t => t.bucket === Bucket.UNASSIGNED);
 

@@ -68,12 +68,22 @@ export interface Thread {
   pinned?: boolean;
   hasAttachments?: boolean;
   answeredQuestionIds?: string[]; // Tracking answered questions for Sawyer
+  manuallyCleared?: boolean;
+  originalBucket?: Bucket | null;
+  lastActionableAt?: string | null;
+  daysSinceLastActionable?: number;
 }
 
 export type ViewType = 
   | { type: 'DASHBOARD' }
   | { type: 'BUCKET'; bucket: Bucket }
   | { type: 'FOCUS' };
+
+export interface ManualClearedMap {
+  [threadId: string]: {
+    bucket: Bucket;
+  };
+}
 
 export interface AppState {
   isAuthenticated: boolean;
@@ -88,6 +98,9 @@ export interface AppState {
   isDraftModalOpen: boolean;
   expandedBuckets: Set<Bucket>;
   darkMode: boolean;
+  manualClearedMap: ManualClearedMap;
+  detailPanelWidth: number;
+  isDetailPanelCollapsed: boolean;
 }
 
 export type Action =
@@ -111,7 +124,10 @@ export type Action =
   | { type: 'LOGIN' }
   | { type: 'LOGOUT' }
   | { type: 'TOGGLE_QUESTION_ANSWERED'; payload: { threadId: string; messageId: string } }
-  | { type: 'SET_LAST_SYNC_TIME'; payload: string };
+  | { type: 'SET_LAST_SYNC_TIME'; payload: string }
+  | { type: 'SET_DETAIL_PANEL_WIDTH'; payload: number }
+  | { type: 'TOGGLE_DETAIL_PANEL' }
+  | { type: 'TOGGLE_MANUAL_CLEAR'; payload: { threadId: string } };
 
 
 

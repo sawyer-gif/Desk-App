@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAppState } from '../store';
 import { Bucket, Priority } from '../types';
 import { Badge, PriorityBadge } from './Badge';
-import { X, ExternalLink, MessageSquare, History, ChevronDown, Pin, AtSign, CheckCircle2, ChevronUp } from 'lucide-react';
+import { X, ExternalLink, MessageSquare, History, ChevronDown, Pin, AtSign, CheckCircle2, ChevronUp, PanelRightClose, Archive, RotateCcw } from 'lucide-react';
 import { formatReceivedTime, detectSawyerQuestions, getThreadSummary } from '../utils';
 import { useAuth } from '@clerk/clerk-react';
 import DOMPurify from 'dompurify';
@@ -202,10 +202,26 @@ export const DetailPanel: React.FC = () => {
     }, 100);
   };
 
+  const handleCollapsePanel = () => {
+    dispatch({ type: 'TOGGLE_DETAIL_PANEL' });
+  };
+
+  const handleManualClearToggle = () => {
+    dispatch({ type: 'TOGGLE_MANUAL_CLEAR', payload: { threadId: thread.id } });
+  };
+
+  const manualClearDescription = thread.manuallyCleared
+    ? 'This thread is manually cleared and hidden from focus lists.'
+    : 'Clear this thread without re-routing or archiving it.';
+
+  const manualClearHelper = thread.manuallyCleared && thread.originalBucket
+    ? `Will return to ${thread.originalBucket} when restored.`
+    : 'You can restore it at any time from here.';
+
   const isUnassigned = thread.bucket === Bucket.UNASSIGNED;
 
   return (
-    <div className="w-[520px] border-l border-black/5 dark:border-white/5 bg-desk-surface-light dark:bg-desk-surface-dark h-full flex flex-col shadow-[-20px_0_40px_rgba(0,0,0,0.015)] animate-in slide-in-from-right duration-500 z-40 transition-colors duration-500">
+    <div className="w-full border-l border-black/5 dark:border-white/5 bg-desk-surface-light dark:bg-desk-surface-dark h-full flex flex-col shadow-[-20px_0_40px_rgba(0,0,0,0.015)] animate-in slide-in-from-right duration-500 z-40 transition-colors duration-500">
       <div className="p-6 pb-4 flex items-center justify-between border-b border-black/5 dark:border-white/5">
         <div className="flex items-center gap-3">
           <button 
@@ -219,12 +235,22 @@ export const DetailPanel: React.FC = () => {
             <p className="text-[13px] font-bold text-desk-text-primary-light dark:text-desk-text-primary-dark">{thread.project}</p>
           </div>
         </div>
-        <button 
-          onClick={handleClosePanel}
-          className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-colors"
-        >
-          <X className="w-5 h-5 text-desk-text-secondary-light dark:text-desk-text-secondary-dark" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleCollapsePanel}
+            className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-colors"
+            title="Collapse panel"
+          >
+            <PanelRightClose className="w-5 h-5 text-desk-text-secondary-light dark:text-desk-text-secondary-dark" />
+          </button>
+          <button 
+            onClick={handleClosePanel}
+            className="p-2 hover:bg-black/5 dark:hover:bg-white/5 rounded-full transition-colors"
+            title="Close detail"
+          >
+            <X className="w-5 h-5 text-desk-text-secondary-light dark:text-desk-text-secondary-dark" />
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-8 space-y-8 no-scrollbar">
@@ -249,6 +275,11 @@ export const DetailPanel: React.FC = () => {
             <Badge variant={thread.bucket === Bucket.PROJECTS ? 'green' : thread.bucket === Bucket.SALES ? 'blue' : 'default'}>
               {thread.bucket}
             </Badge>
+            {thread.manuallyCleared && (
+              <Badge variant="amber">
+                Manually Cleared
+              </Badge>
+            )}
           </div>
           <h1 className="text-xl font-bold leading-tight mb-4 text-desk-text-primary-light dark:text-desk-text-primary-dark">{thread.subject}</h1>
           <p className="text-[14px] text-desk-text-secondary-light dark:text-desk-text-secondary-dark leading-relaxed font-medium">
@@ -379,6 +410,22 @@ export const DetailPanel: React.FC = () => {
               </div>
             );
           })}
+        </section>
+
+        {/* Manual Clear Override */}
+        <section className="rounded-2xl border border-amber-200/60 dark:border-amber-300/20 bg-amber-50/40 dark:bg-amber-500/5 p-5 space-y-3">
+          <div>
+            <h3 className="text-[12px] font-bold uppercase tracking-[0.35em] text-amber-600 dark:text-amber-300 mb-2">Manual Clear</h3>
+            <p className="text-[13px] text-amber-900/80 dark:text-amber-100/80 leading-relaxed">{manualClearDescription}</p>
+            <p className="text-[11px] text-amber-900/60 dark:text-amber-200/60 mt-1">{manualClearHelper}</p>
+          </div>
+          <button
+            onClick={handleManualClearToggle}
+            className={`w-full flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[12px] font-bold transition-colors ${thread.manuallyCleared ? 'bg-desk-text-primary-light text-white dark:bg-desk-text-primary-dark dark:text-desk-surface-dark' : 'bg-amber-500 text-white hover:bg-amber-600'}`}
+          >
+            {thread.manuallyCleared ? <RotateCcw className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
+            {thread.manuallyCleared ? 'Restore to bucket' : 'Mark as cleared'}
+          </button>
         </section>
 
         {/* Conversation Timeline */}

@@ -20,13 +20,13 @@ export function formatReceivedTime(timestamp: string): string {
   }
 }
 
-export function computeWaitingText(days: number, awaiting: boolean): string {
-  if (!awaiting) return '';
+export function computeWaitingText(days: number, show: boolean): string {
+  if (!show) return '';
   return days === 0 ? 'Waiting today' : `Waiting ${days}d`;
 }
 
-export function getWaitingColorClass(days: number, awaiting: boolean): string {
-  if (!awaiting) return 'text-[#A1A1A6]';
+export function getWaitingColorClass(days: number, show: boolean): string {
+  if (!show) return 'text-[#A1A1A6]';
   if (days >= 4) return 'text-[#FF3B30] font-semibold';
   if (days >= 2) return 'text-[#424245] font-semibold';
   return 'text-[#86868B]';
@@ -82,6 +82,17 @@ export function detectSawyerQuestions(messages?: Message[] | null): Message[] {
 
     return (hasSawyer && (hasQuestionMark || matchesPattern)) || (hasQuestionMark && text.includes('you'));
   });
+}
+
+export function getWaitingStatus(thread: Thread) {
+  const waitingDays = thread.awaitingSawyerReply ? thread.daysUnresponded : (thread.daysSinceLastActionable ?? 0);
+  const showWaiting = thread.awaitingSawyerReply || thread.bucket === Bucket.WAITING;
+  const isOverdue = showWaiting && waitingDays >= 4;
+  return { waitingDays, showWaiting, isOverdue };
+}
+
+export function isActionableThread(thread: Thread): boolean {
+  return thread.bucket !== Bucket.CLEARED && !thread.manuallyCleared;
 }
 
 /**

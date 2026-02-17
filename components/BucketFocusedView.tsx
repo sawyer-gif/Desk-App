@@ -4,6 +4,7 @@ import { useAppState } from '../store';
 import { Bucket, Thread } from '../types';
 import { ThreadTile } from './ThreadTile';
 import { ChevronRight, Clock, AlertCircle, Inbox, CheckCircle2 } from 'lucide-react';
+import { getWaitingStatus } from '../utils';
 
 export const BucketFocusedView: React.FC<{ bucket: Bucket }> = ({ bucket }) => {
   const { state } = useAppState();
@@ -18,17 +19,18 @@ export const BucketFocusedView: React.FC<{ bucket: Bucket }> = ({ bucket }) => {
   );
 
   const filteredThreads = searchFiltered.filter(t => {
+    const waitingMeta = getWaitingStatus(t);
     if (tab === 'REPLY') return t.awaitingSawyerReply;
-    if (tab === 'OVERDUE') return (t.awaitingSawyerReply && t.daysUnresponded >= 4) || (t.followUpAt && new Date(t.followUpAt) < new Date());
-    if (tab === 'WAITING') return !t.awaitingSawyerReply || t.followUpAt !== null;
+    if (tab === 'OVERDUE') return waitingMeta.isOverdue;
+    if (tab === 'WAITING') return waitingMeta.showWaiting;
     return true;
   });
 
   const counts = {
     ALL: allThreadsInBucket.length,
     REPLY: allThreadsInBucket.filter(t => t.awaitingSawyerReply).length,
-    OVERDUE: allThreadsInBucket.filter(t => (t.awaitingSawyerReply && t.daysUnresponded >= 4) || (t.followUpAt && new Date(t.followUpAt) < new Date())).length,
-    WAITING: allThreadsInBucket.filter(t => !t.awaitingSawyerReply || t.followUpAt !== null).length,
+    OVERDUE: allThreadsInBucket.filter(t => getWaitingStatus(t).isOverdue).length,
+    WAITING: allThreadsInBucket.filter(t => getWaitingStatus(t).showWaiting).length,
   };
 
   return (

@@ -1,9 +1,60 @@
 
 import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react';
-import { AppState, Action, Bucket, Thread, RoutingRule } from './types';
+import { AppState, Action, Bucket, Thread, RoutingRule, ManualClearedMap } from './types';
+
+const DETAIL_WIDTH_KEY = 'desk-detail-panel-width';
+const DETAIL_COLLAPSE_KEY = 'desk-detail-panel-collapsed';
+const MANUAL_CLEAR_KEY = 'desk-manual-cleared';
+const DARK_MODE_KEY = 'desk-dark-mode';
+const AUTH_KEY = 'desk-auth';
+
+export const DETAIL_PANEL_MIN_WIDTH = 360;
+export const DETAIL_PANEL_MAX_WIDTH = 760;
+const DEFAULT_DETAIL_PANEL_WIDTH = 520;
+
+const readBoolean = (key: string, fallback = false) => {
+  if (typeof window === 'undefined') return fallback;
+  return localStorage.getItem(key) === 'true';
+};
+
+const readNumber = (key: string, fallback: number) => {
+  if (typeof window === 'undefined') return fallback;
+  const raw = localStorage.getItem(key);
+  const value = raw ? Number(raw) : NaN;
+  if (Number.isNaN(value)) return fallback;
+  return value;
+};
+
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+
+const loadManualCleared = (): ManualClearedMap => {
+  if (typeof window === 'undefined') return {};
+  try {
+    const stored = localStorage.getItem(MANUAL_CLEAR_KEY);
+    return stored ? JSON.parse(stored) : {};
+  } catch (err) {
+    console.warn('[Desk] Failed to parse manual cleared overrides', err);
+    return {};
+  }
+};
+
+const persistManualCleared = (map: ManualClearedMap) => {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(MANUAL_CLEAR_KEY, JSON.stringify(map));
+};
+
+const persistDetailWidth = (width: number) => {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(DETAIL_WIDTH_KEY, String(width));
+};
+
+const persistDetailCollapsed = (collapsed: boolean) => {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(DETAIL_COLLAPSE_KEY, String(collapsed));
+};
 
 const initialState: AppState = {
-  isAuthenticated: localStorage.getItem('desk-auth') === 'true',
+  isAuthenticated: readBoolean(AUTH_KEY),
   threads: [],
   routingRules: [],
   selectedThreadId: null,
@@ -14,14 +65,43 @@ const initialState: AppState = {
   dateRange: '30 Days',
   isDraftModalOpen: false,
   expandedBuckets: new Set(),
-  darkMode: localStorage.getItem('desk-dark-mode') === 'true',
+  darkMode: readBoolean(DARK_MODE_KEY),
+  manualClearedMap: loadManualCleared(),
+  detailPanelWidth: clamp(readNumber(DETAIL_WIDTH_KEY, DEFAULT_DETAIL_PANEL_WIDTH), DETAIL_PANEL_MIN_WIDTH, DETAIL_PANEL_MAX_WIDTH),
+  isDetailPanelCollapsed: readBoolean(DETAIL_COLLAPSE_KEY, false),
 };
 
-function reevaluateThreadState(thread: Thread, rules: RoutingRule[]): Thread {
-  const lastInbound = new Date(thread.lastInboundAt).getTime();
+function computeActionableMeta(thread: Thread) {
+  const lastInbound = thread.lastInboundAt ? new Date(thread.lastInboundAt).getTime() : null;
+  const lastOutbound = thread.lastOutboundAt ? new Date(thread.lastOutboundAt).getTime() : null;
+  const awaiting = thread.awaitingSawyerReply;
+
+  let actionableTimestamp: number | null = null;
+  if (awaiting && lastInbound) {
+    actionableTimestamp = lastInbound;
+  } else if (!awaiting && lastOutbound) {
+    actionableTimestamp = lastOutbound;
+  } else if (lastInbound) {
+    actionableTimestamp = lastInbound;
+  }
+
+  const lastActionableAt = actionableTimestamp ? new Date(actionableTimestamp).toISOString() : null;
+  const daysSinceLastActionable = actionableTimestamp
+    ? Math.floor((Date.now() - actionableTimestamp) / (1000 * 60 * 60 * 24))
+    : 0;
+
+  const daysUnresponded = awaiting && lastInbound
+    ? Math.floor((Date.now() - lastInbound) / (1000 * 60 * 60 * 24))
+    : 0;
+
+  return { daysUnresponded, lastActionableAt, daysSinceLastActionable };
+}
+
+function reevaluateThreadState(thread: Thread, rules: RoutingRule[], manualCleared: ManualClearedMap): Thread {
+  const lastInbound = thread.lastInboundAt ? new Date(thread.lastInboundAt).getTime() : 0;
   const lastOutbound = thread.lastOutboundAt ? new Date(thread.lastOutboundAt).getTime() : 0;
   
-  const hasRepliedExternally = lastOutbound > lastInbound;
+  const hasRepliedExternally = lastOutbound > lastInbound && lastOutbound !== 0;
   
   let awaitingReply = thread.awaitingSawyerReply;
   if (hasRepliedExternally) {
@@ -39,26 +119,38 @@ function reevaluateThreadState(thread: Thread, rules: RoutingRule[]): Thread {
     if (rule) bucket = rule.targetBucket;
   }
 
+  const { daysUnresponded, lastActionableAt, daysSinceLastActionable } = computeActionableMeta({ ...thread, bucket, awaitingSawyerReply: awaitingReply });
+
+  const manualMeta = manualCleared[thread.id];
+  if (manualMeta) {
+    bucket = Bucket.CLEARED;
+  }
+
   return {
     ...thread,
     bucket,
     awaitingSawyerReply: awaitingReply,
     followUpAt: followUp,
-    daysUnresponded: awaitingReply ? Math.floor((Date.now() - lastInbound) / (1000 * 60 * 60 * 24)) : 0
+    daysUnresponded,
+    lastActionableAt,
+    daysSinceLastActionable,
+    manuallyCleared: Boolean(manualMeta),
+    originalBucket: manualMeta ? manualMeta.bucket : thread.originalBucket || null,
   };
 }
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case 'LOGIN':
-      localStorage.setItem('desk-auth', 'true');
+      localStorage.setItem(AUTH_KEY, 'true');
       return { ...state, isAuthenticated: true };
     case 'LOGOUT':
-      localStorage.removeItem('desk-auth');
+      localStorage.removeItem(AUTH_KEY);
       return { ...state, isAuthenticated: false };
     case 'SET_THREADS': {
       const incoming = Array.isArray(action.payload) ? action.payload : [];
-      return { ...state, threads: incoming };
+      const normalized = incoming.map(thread => reevaluateThreadState(thread, state.routingRules, state.manualClearedMap));
+      return { ...state, threads: normalized };
     }
     case 'SET_THREAD_MESSAGES': {
       return {
@@ -84,11 +176,25 @@ function reducer(state: AppState, action: Action): AppState {
           targetBucket: action.payload.bucket
         }];
       }
+      let nextManualCleared = state.manualClearedMap;
+      if (nextManualCleared[action.payload.id]) {
+        nextManualCleared = { ...nextManualCleared };
+        delete nextManualCleared[action.payload.id];
+        persistManualCleared(nextManualCleared);
+      }
       return {
         ...state,
         routingRules: nextRules,
+        manualClearedMap: nextManualCleared,
         threads: state.threads.map((t) =>
-          t.id === action.payload.id ? { ...t, bucket: action.payload.bucket } : t
+          t.id === action.payload.id
+            ? {
+                ...t,
+                bucket: action.payload.bucket,
+                manuallyCleared: false,
+                originalBucket: null,
+              }
+            : t
         ),
       };
     }
@@ -103,7 +209,7 @@ function reducer(state: AppState, action: Action): AppState {
     case 'PERFORM_SYNC':
       return {
         ...state,
-        threads: state.threads.map(t => reevaluateThreadState(t, state.routingRules)),
+        threads: state.threads.map(t => reevaluateThreadState(t, state.routingRules, state.manualClearedMap)),
         lastSyncTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
     case 'ADD_ROUTING_RULE':
@@ -170,8 +276,59 @@ function reducer(state: AppState, action: Action): AppState {
       };
     case 'TOGGLE_DARK_MODE':
       const nextDarkMode = !state.darkMode;
-      localStorage.setItem('desk-dark-mode', String(nextDarkMode));
+      localStorage.setItem(DARK_MODE_KEY, String(nextDarkMode));
       return { ...state, darkMode: nextDarkMode };
+    case 'SET_DETAIL_PANEL_WIDTH': {
+      const clamped = clamp(action.payload, DETAIL_PANEL_MIN_WIDTH, DETAIL_PANEL_MAX_WIDTH);
+      persistDetailWidth(clamped);
+      return { ...state, detailPanelWidth: clamped };
+    }
+    case 'TOGGLE_DETAIL_PANEL': {
+      const next = !state.isDetailPanelCollapsed;
+      persistDetailCollapsed(next);
+      return { ...state, isDetailPanelCollapsed: next };
+    }
+    case 'TOGGLE_MANUAL_CLEAR': {
+      const { threadId } = action.payload;
+      const isActive = Boolean(state.manualClearedMap[threadId]);
+      const nextManual = { ...state.manualClearedMap };
+      let nextThreads = state.threads;
+
+      if (isActive) {
+        delete nextManual[threadId];
+        nextThreads = nextThreads.map(thread =>
+          thread.id === threadId
+            ? {
+                ...thread,
+                manuallyCleared: false,
+                bucket: thread.originalBucket || thread.bucket || Bucket.UNASSIGNED,
+                originalBucket: null,
+              }
+            : thread
+        );
+      } else {
+        const targetThread = state.threads.find(t => t.id === threadId);
+        const originalBucket = targetThread?.bucket ?? Bucket.UNASSIGNED;
+        nextManual[threadId] = { bucket: originalBucket };
+        nextThreads = nextThreads.map(thread =>
+          thread.id === threadId
+            ? {
+                ...thread,
+                manuallyCleared: true,
+                originalBucket,
+                bucket: Bucket.CLEARED,
+              }
+            : thread
+        );
+      }
+
+      persistManualCleared(nextManual);
+      return {
+        ...state,
+        manualClearedMap: nextManual,
+        threads: nextThreads,
+      };
+    }
     default:
       return state;
   }

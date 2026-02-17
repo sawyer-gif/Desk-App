@@ -1,9 +1,9 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Thread } from '../types';
+import { Thread, Bucket } from '../types';
 import { useAppState } from '../store';
 import { Sparkles, AlertCircle, Bell, Pin, AtSign } from 'lucide-react';
-import { formatReceivedTime, computeWaitingText, getWaitingColorClass, detectSawyerQuestions } from '../utils';
+import { formatReceivedTime, computeWaitingText, getWaitingColorClass, detectSawyerQuestions, getWaitingStatus } from '../utils';
 
 interface ThreadTileProps {
   thread: Thread;
@@ -16,9 +16,9 @@ export const ThreadTile: React.FC<ThreadTileProps> = ({ thread, compact = false 
   const isSelected = state.selectedThreadId === thread.id;
 
   const receivedTime = formatReceivedTime(thread.lastInboundAt);
-  const waitingText = computeWaitingText(thread.daysUnresponded, thread.awaitingSawyerReply);
-  const waitingColor = getWaitingColorClass(thread.daysUnresponded, thread.awaitingSawyerReply);
-  const isOverdue = thread.awaitingSawyerReply && thread.daysUnresponded >= 4;
+  const { waitingDays, showWaiting, isOverdue } = getWaitingStatus(thread);
+  const waitingText = computeWaitingText(waitingDays, showWaiting);
+  const waitingColor = getWaitingColorClass(waitingDays, showWaiting);
 
   const priorityColor = thread.priority === 'High' ? 'bg-red-500' : thread.priority === 'Normal' ? 'bg-zinc-300 dark:bg-zinc-600' : 'bg-zinc-100 dark:bg-zinc-800';
 

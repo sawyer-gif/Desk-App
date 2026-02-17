@@ -4,6 +4,7 @@ import { useAppState } from '../store';
 import { Thread, Priority } from '../types';
 import { ThreadTile } from './ThreadTile';
 import { ChevronRight, Zap, Inbox, Bell, ChevronDown, ChevronUp } from 'lucide-react';
+import { getWaitingStatus, isActionableThread } from '../utils';
 
 export const FocusActionView: React.FC = () => {
   const { state } = useAppState();
@@ -18,7 +19,7 @@ export const FocusActionView: React.FC = () => {
 
   // Guard: prevent blank-screen if threads is ever undefined/non-array
 const threads: Thread[] = Array.isArray((state as any).threads) ? ((state as any).threads as Thread[]) : [];
-const actionable = threads.filter(t => t.bucket !== 'Cleared');
+const actionable = threads.filter(isActionableThread);
 
 
   // Logic: 
@@ -29,7 +30,8 @@ const actionable = threads.filter(t => t.bucket !== 'Cleared');
   const now = new Date();
   
   const doNow = actionable.filter(t => {
-    const isOverdue = t.awaitingSawyerReply && t.daysUnresponded >= 4;
+    const { waitingDays, showWaiting } = getWaitingStatus(t);
+    const isOverdue = showWaiting && waitingDays >= 4;
     const isFollowUpPassed = t.followUpAt && new Date(t.followUpAt) < now;
     return (isOverdue || isFollowUpPassed) && t.priority === 'High';
   });
