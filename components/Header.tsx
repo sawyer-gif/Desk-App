@@ -105,7 +105,10 @@ export const Header: React.FC = () => {
       dispatch({ type: "SET_SYNCING", payload: true });
 
       const token = await getToken();
-      if (!token) throw new Error("No Clerk session token found");
+      if (!token) {
+        alert('Sign in to sync.');
+        return;
+      }
 
       const params = new URLSearchParams({
         ts: Date.now().toString(),
@@ -122,11 +125,13 @@ export const Header: React.FC = () => {
 
       if (!res.ok || data?.ok === false) {
         if ((res.status === 401 || data?.code === 'AUTH_REQUIRED')) {
-          alert('Connect Google to sync your inbox.');
+          alert('Connect Google to sync your inbox. Use the Connect Google button to link your account.');
           return;
         }
-        const message = data?.message || 'Sync failed. Try again.';
-        throw new Error(message);
+        const code = data?.code || res.status;
+        const requestId = data?.requestId ? ` (ref ${data.requestId})` : '';
+        const message = data?.message || 'Sync failed.';
+        throw new Error(`${message} [${code}]${requestId}`);
       }
 
       const normalizedThreads = normalizeThreads(data?.threads ?? []);
