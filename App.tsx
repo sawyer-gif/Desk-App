@@ -127,6 +127,7 @@ const AppContent: React.FC = () => {
           >
             <ThreadDetailErrorBoundary>
               <DetailPanel />
+              <DraftReplyPanel />
             </ThreadDetailErrorBoundary>
           </div>
         </div>
