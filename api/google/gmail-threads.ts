@@ -5,6 +5,10 @@ import {
   ACTIONABILITY_KEYWORD_BLOCKLIST,
 } from "../../config/actionability";
 
+export const config = {
+  runtime: "nodejs18.x",
+};
+
 type GmailThreadListResponse = {
   threads?: { id: string }[];
   nextPageToken?: string;
@@ -235,6 +239,7 @@ const REQUIRED_ENV_VARS = [
   "GOOGLE_CLIENT_ID",
   "GOOGLE_CLIENT_SECRET",
   "OAUTH_STATE_SECRET",
+  "GOOGLE_REDIRECT_URI",
 ];
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -244,12 +249,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     hasClerkSecret: Boolean(process.env.CLERK_SECRET_KEY),
     hasGoogleClientId: Boolean(process.env.GOOGLE_CLIENT_ID),
     hasGoogleClientSecret: Boolean(process.env.GOOGLE_CLIENT_SECRET),
+    hasOAuthStateSecret: Boolean(process.env.OAUTH_STATE_SECRET),
     hasRedirectUri: Boolean(process.env.GOOGLE_REDIRECT_URI),
   };
   const respond = (status: number, body: Record<string, any>) =>
-    res
-      .status(status)
-      .json({ requestId, debug: envDebug, ...body });
+    res.status(status).json({ requestId, ...body, debug: envDebug });
   const log = (message: string, extra?: Record<string, any>) =>
     console.log(`[Desk][gmail-threads][${requestId}] ${message}`, extra || {});
 
@@ -276,7 +280,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return respond(401, {
         ok: false,
         code: "AUTH_REQUIRED",
-        message: "Connect Google to sync.",
+        message: "Sign in to sync.",
       });
     }
 
@@ -298,7 +302,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return respond(401, {
         ok: false,
         code: "AUTH_REQUIRED",
-        message: "Connect Google to sync.",
+        message: "Sign in to sync.",
       });
     }
 
@@ -307,7 +311,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return respond(401, {
         ok: false,
         code: "AUTH_REQUIRED",
-        message: "Connect Google to sync.",
+        message: "Sign in to sync.",
       });
     }
 
@@ -434,7 +438,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    return respond(200, {
+    return res.status(200).json({
       ok: true,
       connected: true,
       email: google?.email || null,
@@ -448,6 +452,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         capped: ids.length >= MAX_THREAD_CAP,
         primaryOnly: true,
       },
+      requestId,
     });
   } catch (e: any) {
     const errorName = e?.name || "Error";

@@ -6,6 +6,7 @@ import {
   ACTIONABILITY_SYSTEM_KEYWORDS,
   ACTIONABILITY_SENDER_KEYWORDS,
   ACTIONABILITY_DOMAIN_BLOCKLIST,
+  ACTIONABILITY_SUBJECT_BLOCKLIST,
   ACTIONABILITY_DEFAULT_ALLOWLIST,
   ACTIONABILITY_DEFAULT_BLOCKLIST,
   GMAIL_EXCLUDED_LABELS,
@@ -180,7 +181,9 @@ export function evaluateThreadActionability(thread: Thread, prefs?: Actionabilit
   const emailLower = (thread.fromEmail || '').toLowerCase();
   const displayLower = (thread.fromName || '').toLowerCase();
   const haystack = `${thread.subject} ${thread.snippet}`.toLowerCase();
+  const subjectLower = (thread.subject || '').toLowerCase();
   const systemKeywordMatch = ACTIONABILITY_SYSTEM_KEYWORDS.some((kw) => haystack.includes(kw));
+  const subjectKeywordHit = ACTIONABILITY_SUBJECT_BLOCKLIST.some((kw) => subjectLower.includes(kw));
 
   if (positiveFailures.length) {
     return { isActionable: false, reason: positiveFailures[0], isMuted: false };
@@ -208,12 +211,16 @@ export function evaluateThreadActionability(thread: Thread, prefs?: Actionabilit
       reasons.push('keyword-match');
     }
 
+    if (subjectKeywordHit) {
+      reasons.push('subject-keyword');
+    }
+
     if (domain && blocklist.has(domain)) {
       reasons.push(`domain-blocked:${domain}`);
     }
 
-    if (domain && ACTIONABILITY_DOMAIN_BLOCKLIST.includes(domain) && systemKeywordMatch) {
-      reasons.push(`domain-keyword:${domain}`);
+    if (domain && ACTIONABILITY_DOMAIN_BLOCKLIST.includes(domain)) {
+      reasons.push(`system-domain:${domain}`);
     }
 
     if (emailLower.includes('support@') && systemKeywordMatch) {

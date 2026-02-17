@@ -12,6 +12,9 @@ export const ACTIONABILITY_KEYWORD_BLOCKLIST = [
   "account has been funded",
   "billing",
   "usage limits",
+  "usage limit",
+  "api usage",
+  "rate limit",
   "subscription",
   "notification",
   "security advisory",
@@ -65,6 +68,21 @@ export const ACTIONABILITY_DOMAIN_BLOCKLIST = [
   "hubspot.com",
   "intercom.com",
   "flow.space",
+];
+
+export const ACTIONABILITY_SUBJECT_BLOCKLIST = [
+  "payment",
+  "receipt",
+  "invoice",
+  "api usage",
+  "rate limit",
+  "usage limit",
+  "account funded",
+  "billing",
+  "subscription",
+  "automated notification",
+  "security alert",
+  "password reset",
 ];
 
 export const ACTIONABILITY_DEFAULT_ALLOWLIST = [

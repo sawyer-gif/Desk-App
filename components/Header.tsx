@@ -126,7 +126,7 @@ export const Header: React.FC = () => {
       if (!res.ok || data?.ok === false) {
         console.error('[Desk] Sync error', { status: res.status, body: data });
         if ((res.status === 401 || data?.code === 'AUTH_REQUIRED')) {
-          alert('Connect Google to sync your inbox. Use the Connect Google button to link your account.');
+          alert('Please sign in to sync.');
           return;
         }
         if ((res.status === 403 || data?.code === 'GOOGLE_NOT_CONNECTED')) {
