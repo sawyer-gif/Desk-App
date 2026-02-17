@@ -450,17 +450,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     });
   } catch (e: any) {
+    const errorName = e?.name || "Error";
+    const errorMessage = typeof e?.message === "string" ? e.message : "Unknown error";
     log("sync-failed", {
-      error: e?.name,
-      message: e?.message,
+      errorName,
+      errorMessage,
       stack: typeof e?.stack === "string" ? e.stack.split("\n")[0]?.trim() : undefined,
     });
-    const detail = typeof e?.message === "string" ? e.message : "Unknown error";
+    console.error("[gmail-threads]", { requestId, code: "SYNC_FAILED", errorName });
     return respond(500, {
       ok: false,
       code: "SYNC_FAILED",
       message: "Sync failed",
-      detail,
+      errorName,
+      errorMessage,
     });
   }
 }

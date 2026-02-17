@@ -133,7 +133,8 @@ export const Header: React.FC = () => {
           alert('Google account not connected. Use the Connect Google button to link your account.');
           return;
         }
-        alert(`Sync failed (${res.status}). See console for details.`);
+        const code = data?.code || res.status;
+        alert(`Sync failed: ${code}. See console for details.`);
         return;
       }
 
