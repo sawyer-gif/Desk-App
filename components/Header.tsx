@@ -2,6 +2,7 @@ import React from 'react';
 import { useAuth } from "@clerk/clerk-react";
 import { useAppState } from '../store';
 import { Search, RefreshCw, ChevronLeft, Moon, Sun, LogOut } from 'lucide-react';
+import ConnectGoogleButton from './ConnectGoogleButton';
 import { Bucket, Priority, Thread, DateRange } from '../types';
 
 const parseEmailAddress = (raw: string) => {
@@ -255,14 +256,7 @@ export const Header: React.FC = () => {
         </button>
 
         <div className="w-px h-6 bg-black/5 dark:bg-white/5 mx-2" />
-        {showGoogleConnect && (
-          <button
-            onClick={() => { dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'CONNECTING' }); window.location.href = '/api/google/auth/start'; }}
-            className="px-3 py-1.5 text-[12px] font-bold rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-all"
-          >
-            {state.googleStatus === 'CONNECTING' ? 'Connecting…' : 'Connect Google'}
-          </button>
-        )}
+        {showGoogleConnect && <ConnectGoogleButton />}
 
         <button
           onClick={() => handleSync()}
