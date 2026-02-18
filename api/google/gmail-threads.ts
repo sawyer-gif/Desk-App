@@ -1,9 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClerkClient, verifyToken } from "@clerk/backend";
-import {
-  ACTIONABILITY_NO_REPLY_PATTERNS,
-  ACTIONABILITY_KEYWORD_BLOCKLIST,
-} from "../../config/actionability";
+
+export const runtime = "nodejs";
 
 type GmailThreadListResponse = {
   threads?: { id: string }[];
@@ -243,7 +241,7 @@ const REQUIRED_ENV_VARS = [
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const requestId = `gmail-sync-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const runtime = process.env.VERCEL ? "vercel" : "node";
+  const runtimeMode = process.env.VERCEL ? "vercel" : "node";
   const envFlags = {
     hasClerkSecret: Boolean(process.env.CLERK_SECRET_KEY),
     hasGoogleClientId: Boolean(process.env.GOOGLE_CLIENT_ID),
@@ -259,7 +257,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   ) => {
     const payload: Record<string, any> = { requestId, ...body };
     if (options.includeDebug) {
-      payload.debug = { runtime, ...envFlags };
+      payload.debug = { runtime: runtimeMode, ...envFlags };
     }
     return res.status(status).json(payload);
   };
