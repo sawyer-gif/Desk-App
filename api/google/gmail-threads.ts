@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
+
 import { createClerkClient, verifyToken } from "@clerk/backend";
 
 type GmailThreadListResponse = {
