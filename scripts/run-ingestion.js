@@ -1,8 +1,12 @@
 #!/usr/bin/env node
-const fs = require('fs');
-const path = require('path');
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const sources = require('../sources');
+import sources from '../sources/index.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const HOME = process.env.HOME || '.';
 const LOG_DIR = path.resolve(HOME, 'scopefirst/logs');

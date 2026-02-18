@@ -72,7 +72,9 @@ async function ingest({ since }) {
   }
 }
 
-module.exports = {
+const adapter = {
   name: 'miamiDadePermits',
   ingest,
 };
+
+export default adapter;

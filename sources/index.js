@@ -1,9 +1,9 @@
-const miamiDadePermits = require('./miamiDadePermits');
-const floridaPublicRecords = require('./floridaPublicRecords');
-const adaFilings = require('./adaFilings');
-const titleTransfers = require('./titleTransfers');
+import miamiDadePermits from './miamiDadePermits.js';
+import floridaPublicRecords from './floridaPublicRecords.js';
+import adaFilings from './adaFilings.js';
+import titleTransfers from './titleTransfers.js';
 
-module.exports = [
+export default [
   miamiDadePermits,
   floridaPublicRecords,
   adaFilings,

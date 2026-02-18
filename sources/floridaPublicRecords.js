@@ -19,7 +19,9 @@ async function ingest({ since }) {
   return records.filter((record) => new Date(record.detected_at) >= sinceDate);
 }
 
-module.exports = {
+const adapter = {
   name: 'floridaPublicRecords',
   ingest,
 };
+
+export default adapter;

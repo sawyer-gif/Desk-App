@@ -1,6 +1,9 @@
-const fs = require('fs');
-const path = require('path');
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const SAMPLE_DATA_PATH = path.resolve(__dirname, '..', 'data', 'samples', 'title-transfers.json');
 
 function loadSampleTransfers() {
@@ -44,7 +47,9 @@ async function ingest({ since }) {
     .filter((record) => new Date(record.detected_at) >= sinceDate);
 }
 
-module.exports = {
+const adapter = {
   name: 'titleTransfers',
   ingest,
 };
+
+export default adapter;

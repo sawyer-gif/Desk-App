@@ -17,7 +17,9 @@ async function ingest({ since }) {
   return buildAdaRecords().filter((record) => new Date(record.detected_at) >= sinceDate);
 }
 
-module.exports = {
+const adapter = {
   name: 'adaFilings',
   ingest,
 };
+
+export default adapter;
