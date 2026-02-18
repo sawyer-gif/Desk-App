@@ -53,7 +53,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       `&scope=${scope}` +
       `&access_type=offline` +
       `&prompt=consent` +
-      `&include_granted_scopes=true` +
+      `&include_granted_scopes=false` +
       `&state=${encodeURIComponent(state)}`;
 
     return res.status(200).json({ url });
