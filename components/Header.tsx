@@ -96,6 +96,24 @@ export const Header: React.FC = () => {
   const { state, dispatch } = useAppState();
   const { getToken } = useAuth();
 
+  React.useEffect(() => {
+    const controller = new AbortController();
+    const loadStatus = async () => {
+      try {
+        const res = await fetch(`/api/google/status?ts=${Date.now()}`, { cache: 'no-store', signal: controller.signal });
+        if (!res.ok) throw new Error('status failed');
+        const data = await res.json();
+        dispatch({ type: 'SET_GOOGLE_STATUS', payload: data?.connected ? 'CONNECTED' : 'NOT_CONNECTED' });
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'NOT_CONNECTED' });
+        }
+      }
+    };
+    loadStatus();
+    return () => controller.abort();
+  }, [dispatch]);
+
   const handleSync = async (rangeOverride?: DateRange) => {
     if (state.isSyncing) return;
 
@@ -134,7 +152,8 @@ export const Header: React.FC = () => {
           message: data?.message,
           requestId: data?.requestId,
         });
-        const errorMessage = [`Sync failed: ${res.status}`, data?.code ? `code=${data.code}` : null, data?.requestId ? `requestId=${data.requestId}` : null].filter(Boolean).join(' ');
+        const isAuthError = res.status === 401 || res.status === 403;
+        const isUpstreamError = res.status === 502 || (data?.code === 'GMAIL_UPSTREAM_ERROR');
         if (res.status === 401 && data?.code === 'AUTH_REQUIRED') {
           dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'AUTH_REQUIRED' });
           alert('Please connect Google to continue.');
