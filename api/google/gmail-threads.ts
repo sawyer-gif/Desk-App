@@ -33,6 +33,84 @@ const MAX_THREAD_CAP = Number(process.env.GMAIL_THREAD_CAP || 250);
 const PAGE_SIZE = Number(process.env.GMAIL_PAGE_SIZE || 100);
 const THREAD_META_CONCURRENCY = Number(process.env.GMAIL_THREAD_CONCURRENCY || 8);
 
+class GmailApiError extends Error {
+  status: number;
+  reason?: string;
+  details?: Record<string, any>;
+
+  constructor(message: string, opts: { status?: number; reason?: string; details?: Record<string, any> }) {
+    super(message);
+    this.name = "GmailApiError";
+    this.status = opts.status ?? 502;
+    this.reason = opts.reason;
+    this.details = opts.details;
+  }
+}
+
+function extractRetryAfter(headers: Headers | undefined) {
+  if (!headers) return undefined;
+  const value = headers.get("retry-after") || headers.get("Retry-After");
+  return value || undefined;
+}
+
+type NormalizedGoogleError = {
+  status: number;
+  code: "AUTH_REQUIRED" | "GOOGLE_NOT_CONNECTED" | "GMAIL_RATE_LIMIT" | "GMAIL_UPSTREAM_ERROR";
+  message: string;
+  reason?: string;
+  retryAfter?: string;
+  upstreamStatus?: number;
+};
+
+function normalizeGoogleError(error: unknown): NormalizedGoogleError | null {
+  if (!(error instanceof GmailApiError)) return null;
+  const bodyError = typeof error.details?.body?.error === "string" ? error.details.body.error : undefined;
+  const bodyReason =
+    error.details?.body?.error?.status ||
+    error.details?.body?.error?.errors?.[0]?.reason ||
+    error.details?.body?.error_description;
+  const mergedReason = error.reason || bodyReason || bodyError;
+  const normalizedReason = mergedReason ? String(mergedReason) : undefined;
+  const lowerReason = normalizedReason?.toLowerCase();
+  const isAuthError =
+    lowerReason === "invalid_grant" ||
+    lowerReason === "invalid_client" ||
+    lowerReason === "unauthorized_client" ||
+    lowerReason === "token_revoked";
+  const isRateLimit =
+    lowerReason === "rate_limit_exceeded" ||
+    lowerReason === "user_rate_limit_exceeded" ||
+    lowerReason === "daily_limit_exceeded" ||
+    lowerReason === "quotaexceeded" ||
+    error.status === 429;
+  const upstreamStatus = error.status || 502;
+  const normalizedStatus = isAuthError ? 401 : isRateLimit ? 429 : upstreamStatus;
+  const code =
+    normalizedStatus === 401
+      ? "AUTH_REQUIRED"
+      : normalizedStatus === 403
+      ? "GOOGLE_NOT_CONNECTED"
+      : normalizedStatus === 429
+      ? "GMAIL_RATE_LIMIT"
+      : "GMAIL_UPSTREAM_ERROR";
+  const message =
+    normalizedStatus === 401
+      ? "Reconnect Google to sync."
+      : normalizedStatus === 403
+      ? "Google access is blocked."
+      : normalizedStatus === 429
+      ? "Gmail rate limit hit. Try again later."
+      : "Gmail request failed.";
+  return {
+    status: normalizedStatus,
+    code,
+    message,
+    reason: normalizedReason,
+    retryAfter: error.details?.retryAfter,
+    upstreamStatus: error.status,
+  };
+}
+
 async function refreshAccessToken(refreshToken: string) {
   const body = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID || "",
@@ -47,8 +125,21 @@ async function refreshAccessToken(refreshToken: string) {
     body,
   });
 
-  const json = await r.json();
-  if (!r.ok) throw new Error(json?.error_description || "Refresh failed");
+  let json: any = null;
+  try {
+    json = await r.json();
+  } catch {
+    json = null;
+  }
+
+  if (!r.ok) {
+    throw new GmailApiError(json?.error_description || "Refresh failed", {
+      status: r.status,
+      reason: json?.error,
+      details: { body: json, retryAfter: extractRetryAfter(r.headers) },
+    });
+  }
+
   return json as { access_token: string; expires_in?: number; token_type?: string };
 }
 
@@ -67,10 +158,19 @@ async function gmailListThreads(
 
   const url = `https://gmail.googleapis.com/gmail/v1/users/me/threads?${params.toString()}`;
   const r = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-  const json = await r.json();
+  let json: any = null;
+  try {
+    json = await r.json();
+  } catch {
+    json = null;
+  }
   if (!r.ok) {
     const message = json?.error?.message || "Failed to list threads";
-    throw new Error(message);
+    throw new GmailApiError(message, {
+      status: r.status,
+      reason: json?.error?.status || json?.error?.errors?.[0]?.reason || json?.error,
+      details: { body: json, retryAfter: extractRetryAfter(r.headers) },
+    });
   }
   return json as GmailThreadListResponse;
 }
@@ -81,10 +181,19 @@ async function gmailGetThreadMeta(accessToken: string, threadId: string) {
     `?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`;
 
   const r = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-  const json = await r.json();
+  let json: any = null;
+  try {
+    json = await r.json();
+  } catch {
+    json = null;
+  }
   if (!r.ok) {
     const message = json?.error?.message || "Failed to fetch thread";
-    throw new Error(message);
+    throw new GmailApiError(message, {
+      status: r.status,
+      reason: json?.error?.status || json?.error?.errors?.[0]?.reason || json?.error,
+      details: { body: json, retryAfter: extractRetryAfter(r.headers) },
+    });
   }
   return json as any;
 }
@@ -252,6 +361,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   };
   let signedIn = false;
   let googleConnected = false;
+  let hasRefreshToken = false;
+  let hasAccessToken = false;
 
   const respond = (
     status: number,
@@ -336,6 +447,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const google = (user.privateMetadata as any)?.google?.gmail;
     const refreshToken = google?.refresh_token;
+    hasRefreshToken = Boolean(refreshToken);
 
     if (!google?.connected || !refreshToken) {
       log("google-not-connected", { signedIn, googleConnected });
@@ -352,13 +464,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       const refreshed = await refreshAccessToken(refreshToken);
       accessToken = refreshed.access_token;
-    } catch (err: any) {
-      log("refresh-failed", { message: err?.message });
+      hasAccessToken = true;
+    } catch (err: unknown) {
+      const normalized = normalizeGoogleError(err);
+      if (normalized) {
+        log("refresh-failed", { message: normalized.reason, status: normalized.status });
+        return respond(normalized.status, {
+          ok: false,
+          code: normalized.code,
+          message: normalized.message,
+          details: {
+            stage: "refresh-token",
+            reason: normalized.reason,
+            retryAfter: normalized.retryAfter,
+            hasRefreshToken,
+            hasAccessToken,
+          },
+        });
+      }
+      log("refresh-failed", { message: (err as Error)?.message });
       return respond(502, {
         ok: false,
         code: "GMAIL_UPSTREAM_ERROR",
         message: "Gmail request failed.",
-        details: err?.message || "Unable to refresh token.",
+        details: (err as Error)?.message || "Unable to refresh token.",
       });
     }
 
@@ -410,26 +539,58 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         nextPageToken = list.nextPageToken && ids.length < MAX_THREAD_CAP ? list.nextPageToken : undefined;
         pageCount += 1;
       } while (nextPageToken);
-    } catch (err: any) {
-      log("gmail-list-failed", { message: err?.message });
+    } catch (err: unknown) {
+      const normalized = normalizeGoogleError(err);
+      if (normalized) {
+        log("gmail-list-failed", { message: normalized.reason, status: normalized.status });
+        return respond(normalized.status, {
+          ok: false,
+          code: normalized.code,
+          message: normalized.message,
+          details: {
+            stage: "list-threads",
+            reason: normalized.reason,
+            retryAfter: normalized.retryAfter,
+            hasRefreshToken,
+            hasAccessToken,
+          },
+        });
+      }
+      log("gmail-list-failed", { message: (err as Error)?.message });
       return respond(502, {
         ok: false,
         code: "GMAIL_UPSTREAM_ERROR",
         message: "Gmail request failed.",
-        details: err?.message || "Unable to list threads.",
+        details: (err as Error)?.message || "Unable to list threads.",
       });
     }
 
     let metas: ThreadMeta[] = [];
     try {
       metas = await fetchThreadMetas(accessToken, ids, accountEmail);
-    } catch (err: any) {
-      log("thread-meta-failed", { message: err?.message });
+    } catch (err: unknown) {
+      const normalized = normalizeGoogleError(err);
+      if (normalized) {
+        log("thread-meta-failed", { message: normalized.reason, status: normalized.status });
+        return respond(normalized.status, {
+          ok: false,
+          code: normalized.code,
+          message: normalized.message,
+          details: {
+            stage: "thread-metadata",
+            reason: normalized.reason,
+            retryAfter: normalized.retryAfter,
+            hasRefreshToken,
+            hasAccessToken,
+          },
+        });
+      }
+      log("thread-meta-failed", { message: (err as Error)?.message });
       return respond(502, {
         ok: false,
         code: "GMAIL_UPSTREAM_ERROR",
         message: "Gmail request failed.",
-        details: err?.message || "Unable to load thread metadata.",
+        details: (err as Error)?.message || "Unable to load thread metadata.",
       });
     }
 

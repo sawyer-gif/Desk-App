@@ -135,17 +135,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const profile = await fetchGmailProfile(tokens.access_token);
 
     const clerk = createClerkClient({ secretKey: requireEnv("CLERK_SECRET_KEY") });
+    const user = await clerk.users.getUser(userId);
+    const existingGoogle = ((user.privateMetadata as any)?.google?.gmail || {}) as Record<string, any>;
+    const nextRefreshToken = tokens.refresh_token || existingGoogle.refresh_token || null;
+
+    if (!nextRefreshToken) {
+      sendJson(res, 400, { error: "Missing refresh token" });
+      return;
+    }
+
+    const nextGoogleMetadata = {
+      ...existingGoogle,
+      connected: true,
+      email: profile.emailAddress || existingGoogle.email || null,
+      refresh_token: nextRefreshToken,
+      scope: tokens.scope || existingGoogle.scope || null,
+      connectedAt: new Date().toISOString(),
+    };
 
     await clerk.users.updateUser(userId, {
       privateMetadata: {
+        ...(user.privateMetadata || {}),
         google: {
-          gmail: {
-            connected: true,
-            email: profile.emailAddress || null,
-            refresh_token: tokens.refresh_token || null,
-            scope: tokens.scope || null,
-            connectedAt: new Date().toISOString(),
-          },
+          ...(typeof (user.privateMetadata as any)?.google === "object" ? (user.privateMetadata as any).google : {}),
+          gmail: nextGoogleMetadata,
         },
       },
     });
@@ -154,11 +167,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       `${STATE_COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax; Secure`,
     ];
 
-    if (tokens.refresh_token) {
-      cookies.push(
-        `${REFRESH_COOKIE_NAME}=${encodeURIComponent(tokens.refresh_token)}; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=${60 * 60 * 24 * 30}`
-      );
-    }
+    cookies.push(
+      `${REFRESH_COOKIE_NAME}=${encodeURIComponent(nextRefreshToken)}; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=${60 * 60 * 24 * 30}`
+    );
 
     res.setHeader("Set-Cookie", cookies);
     res.redirect(302, "/");
