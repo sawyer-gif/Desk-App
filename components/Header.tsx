@@ -2,7 +2,6 @@ import React from 'react';
 import { useAuth } from "@clerk/clerk-react";
 import { useAppState } from '../store';
 import { Search, RefreshCw, ChevronLeft, Moon, Sun, LogOut } from 'lucide-react';
-import ConnectGoogleButton from './ConnectGoogleButton';
 import { Bucket, Priority, Thread, DateRange } from '../types';
 
 const parseEmailAddress = (raw: string) => {
@@ -181,38 +180,6 @@ export const Header: React.FC = () => {
   const handleLogout = () => {
     dispatch({ type: 'LOGOUT' });
   };
-const connectGoogle = async () => {
-  try {
-    const token = await getToken();
-    if (!token) {
-      alert('Sign in first.');
-      return;
-    }
-    dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'CONNECTING' });
-    const res = await fetch("/api/google/google-start?ts=" + Date.now(), {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      cache: "no-store",
-    });
-
-    if (!res.ok) {
-      const txt = await res.text();
-      alert("Google connect failed: " + txt);
-      dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'NOT_CONNECTED' });
-      return;
-    }
-
-    const data = await res.json();
-    window.location.href = data.url;
-
-  } catch (err) {
-    console.error(err);
-    dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'NOT_CONNECTED' });
-    alert("Google connect error");
-  }
-};
 
   const handleRangeSelect = (range: DateRange) => {
     dispatch({ type: 'SET_DATE_RANGE', payload: range });
@@ -222,7 +189,7 @@ const connectGoogle = async () => {
   };
 
   const isDashboard = state.currentView.type === 'DASHBOARD';
-  const showGoogleConnect = state.googleStatus === 'AUTH_REQUIRED' || state.googleStatus === 'NOT_CONNECTED';
+  const showGoogleConnect = state.googleStatus !== 'CONNECTED';
 
   return (
     <header className="glass sticky top-0 z-50 px-8 py-4 flex items-center justify-between dark:bg-desk-surface-dark/80 dark:border-white/5">
@@ -289,7 +256,12 @@ const connectGoogle = async () => {
 
         <div className="w-px h-6 bg-black/5 dark:bg-white/5 mx-2" />
         {showGoogleConnect && (
-          <ConnectGoogleButton status={state.googleStatus} onConnect={connectGoogle} />
+          <button
+            onClick={() => { dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'CONNECTING' }); window.location.href = '/api/google/auth/start'; }}
+            className="px-3 py-1.5 text-[12px] font-bold rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-all"
+          >
+            {state.googleStatus === 'CONNECTING' ? 'Connecting…' : 'Connect Google'}
+          </button>
         )}
 
         <button

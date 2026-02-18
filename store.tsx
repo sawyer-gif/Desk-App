@@ -505,6 +505,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [state, dispatch] = useReducer(reducer, initialState);
 
   useEffect(() => {
+    const controller = new AbortController();
+    const fetchStatus = async () => {
+      try {
+        const res = await fetch('/api/google/status', { cache: 'no-store', signal: controller.signal });
+        if (!res.ok) throw new Error('status failed');
+        const data = await res.json();
+        dispatch({ type: 'SET_GOOGLE_STATUS', payload: data?.connected ? 'CONNECTED' : 'NOT_CONNECTED' });
+      } catch (err) {
+        if (controller.signal.aborted) return;
+        dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'NOT_CONNECTED' });
+      }
+    };
+    fetchStatus();
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
     if (state.darkMode) {
       document.documentElement.classList.add('dark');
     } else {
