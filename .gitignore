@@ -6,3 +6,7 @@ dist
 node_modules
 .vercel
 .env*.local
+
+data/signals.jsonl
+data/state/
+scopefirst/

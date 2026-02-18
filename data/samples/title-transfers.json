@@ -1,0 +1,16 @@
+[
+  {
+    "folio": "01-1234-000-0010",
+    "address": "1450 Brickell Ave, Miami, FL",
+    "buyer": "Brickell Holdings LLC",
+    "seller": "Sunset Properties Inc.",
+    "recorded": "2026-02-16T14:30:00.000Z"
+  },
+  {
+    "folio": "02-5678-000-0090",
+    "address": "2100 Biscayne Blvd, Miami, FL",
+    "buyer": "Design Tower Partners",
+    "seller": "North Bay Investments",
+    "recorded": "2026-02-16T16:00:00.000Z"
+  }
+]
