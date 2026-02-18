@@ -92,8 +92,6 @@ const normalizeThreads = (threads: any[]): Thread[] => {
   });
 };
 
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
 export const Header: React.FC = () => {
   const { state, dispatch } = useAppState();
   const { getToken } = useAuth();
@@ -117,29 +115,19 @@ export const Header: React.FC = () => {
     refreshStatus();
   }, [refreshStatus]);
 
-  React.useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.has('connected')) {
-      refreshStatus();
-      params.delete('connected');
-      const next = params.toString();
-      const nextUrl = next ? `${window.location.pathname}?${next}` : window.location.pathname;
-      window.history.replaceState({}, '', nextUrl);
-    }
-  }, [refreshStatus]);
-
   const handleSync = async (rangeOverride?: DateRange) => {
     if (state.isSyncing || state.googleStatus !== 'CONNECTED') return;
 
     const activeRange = rangeOverride ?? state.dateRange ?? '30 Days';
     const rangeDays = rangeToDays(activeRange);
 
-    const performSync = async (attempt: number): Promise<boolean> => {
+    dispatch({ type: 'SET_SYNCING', payload: true });
+    try {
       const token = await getToken();
       if (!token) {
         dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'AUTH_REQUIRED' });
         alert('Sign in to sync.');
-        return false;
+        return;
       }
 
       const params = new URLSearchParams({
@@ -159,20 +147,20 @@ export const Header: React.FC = () => {
         if (res.status === 401 && data?.code === 'AUTH_REQUIRED') {
           dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'AUTH_REQUIRED' });
           alert('Reconnect Google to sync.');
-          return false;
+          return;
         }
         if (res.status === 403 && data?.code === 'GOOGLE_NOT_CONNECTED') {
           dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'NOT_CONNECTED' });
           alert('Google account not connected.');
-          return false;
+          return;
         }
-        if ((res.status === 502 || data?.code === 'GMAIL_UPSTREAM_ERROR') && attempt < 2) {
-          await delay(attempt === 0 ? 500 : 1500);
-          return performSync(attempt + 1);
+        if (res.status === 502 || res.status === 503 || data?.code === 'GMAIL_UPSTREAM_ERROR') {
+          alert('Temporary Gmail upstream error. Try again.');
+          return;
         }
         const details = data?.message || data?.error || `Sync failed (${res.status}).`;
         alert(details);
-        return false;
+        return;
       }
 
       const normalizedThreads = normalizeThreads(data?.threads ?? []);
@@ -194,13 +182,7 @@ export const Header: React.FC = () => {
         },
       });
       dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'CONNECTED' });
-      return true;
-    };
-
-    dispatch({ type: 'SET_SYNCING', payload: true });
-    try {
-      await performSync(0);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
       alert(err?.message || 'Sync failed. Try again.');
     } finally {

@@ -161,7 +161,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     res.setHeader("Set-Cookie", cookies);
-    res.redirect(302, "/?connected=1");
+    res.redirect(302, "/");
   } catch (e: any) {
     console.error("[Desk][oauth-callback]", e);
     sendJson(res, 500, { error: e?.message || "OAuth callback error" });
