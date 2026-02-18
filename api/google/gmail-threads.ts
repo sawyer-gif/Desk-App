@@ -5,10 +5,6 @@ import {
   ACTIONABILITY_KEYWORD_BLOCKLIST,
 } from "../../config/actionability";
 
-export const config = {
-  runtime: "nodejs18.x",
-};
-
 type GmailThreadListResponse = {
   threads?: { id: string }[];
   nextPageToken?: string;
@@ -28,6 +24,9 @@ type ThreadMeta = {
     latestExternalEmail?: string;
     latestHeaders?: Record<string, string>;
     autoFlags?: string[];
+    hasInbox?: boolean;
+    lastMessageFromAccount?: boolean;
+    lastMessageEmail?: string;
   };
 };
 
@@ -244,16 +243,27 @@ const REQUIRED_ENV_VARS = [
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const requestId = `gmail-sync-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const envDebug = {
-    runtime: process.env.VERCEL ? "vercel" : "node",
+  const runtime = process.env.VERCEL ? "vercel" : "node";
+  const envFlags = {
     hasClerkSecret: Boolean(process.env.CLERK_SECRET_KEY),
     hasGoogleClientId: Boolean(process.env.GOOGLE_CLIENT_ID),
     hasGoogleClientSecret: Boolean(process.env.GOOGLE_CLIENT_SECRET),
     hasOAuthStateSecret: Boolean(process.env.OAUTH_STATE_SECRET),
     hasRedirectUri: Boolean(process.env.GOOGLE_REDIRECT_URI),
   };
-  const respond = (status: number, body: Record<string, any>) =>
-    res.status(status).json({ requestId, ...body, debug: envDebug });
+
+  const respond = (
+    status: number,
+    body: Record<string, any>,
+    options: { includeDebug?: boolean } = {}
+  ) => {
+    const payload: Record<string, any> = { requestId, ...body };
+    if (options.includeDebug) {
+      payload.debug = { runtime, ...envFlags };
+    }
+    return res.status(status).json(payload);
+  };
+
   const log = (message: string, extra?: Record<string, any>) =>
     console.log(`[Desk][gmail-threads][${requestId}] ${message}`, extra || {});
 
@@ -272,9 +282,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ? (req.headers as any).Authorization
         : "");
     const token = authHeaderRaw.startsWith("Bearer ") ? authHeaderRaw.slice(7) : "";
-    const hasAuthHeader = Boolean(token);
-    const daysParam = req.query.days;
-    log("request:start", { hasAuthHeader, daysParam });
 
     if (!token) {
       return respond(401, {
@@ -284,15 +291,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    const clerkSecret = process.env.CLERK_SECRET_KEY;
-    if (!clerkSecret) {
-      log("missing-env", { missing: ["CLERK_SECRET_KEY"] });
+    const missingEnv = REQUIRED_ENV_VARS.filter((key) => !process.env[key]);
+    if (missingEnv.length) {
+      log("missing-env", { missingEnv });
       return respond(500, {
         ok: false,
-        code: "MISSING_ENV",
-        message: "Missing server env vars",
-      });
+        code: "SERVER_MISCONFIG",
+        message: "Missing server configuration.",
+      }, { includeDebug: true });
     }
+
+    const clerkSecret = process.env.CLERK_SECRET_KEY as string;
 
     let verified;
     try {
@@ -315,30 +324,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    const remainingMissing = REQUIRED_ENV_VARS.filter((key) => key !== "CLERK_SECRET_KEY" && !process.env[key]);
-    if (remainingMissing.length) {
-      log("missing-env", { missing: remainingMissing });
-      return respond(500, {
-        ok: false,
-        code: "MISSING_ENV",
-        message: "Missing server env vars",
-      });
-    }
-
     const clerk = createClerkClient({ secretKey: clerkSecret });
     const user = await clerk.users.getUser(userId);
 
     const google = (user.privateMetadata as any)?.google?.gmail;
     const refreshToken = google?.refresh_token;
 
-    if (!google?.connected) {
-      return respond(403, {
-        ok: false,
-        code: "GOOGLE_NOT_CONNECTED",
-        message: "Connect Google to sync.",
-      });
-    }
-    if (!refreshToken) {
+    if (!google?.connected || !refreshToken) {
       return respond(403, {
         ok: false,
         code: "GOOGLE_NOT_CONNECTED",
@@ -352,10 +344,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       accessToken = refreshed.access_token;
     } catch (err: any) {
       log("refresh-failed", { message: err?.message });
-      return respond(401, {
+      return respond(502, {
         ok: false,
-        code: "AUTH_REQUIRED",
-        message: "Connect Google to sync.",
+        code: "GMAIL_UPSTREAM_ERROR",
+        message: "Gmail request failed.",
+        details: err?.message || "Unable to refresh token.",
       });
     }
 
@@ -409,19 +402,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } while (nextPageToken);
     } catch (err: any) {
       log("gmail-list-failed", { message: err?.message });
-      const msg = (err?.message || "Google sync failed").toLowerCase();
-      if (msg.includes("invalid") || msg.includes("unauthorized") || msg.includes("401")) {
-        return respond(401, {
-          ok: false,
-          code: "AUTH_REQUIRED",
-          message: "Connect Google to sync.",
-        });
-      }
-      return respond(500, {
+      return respond(502, {
         ok: false,
-        code: "SYNC_FAILED",
-        message: "Sync failed",
-        detail: err?.message || "Unable to list threads",
+        code: "GMAIL_UPSTREAM_ERROR",
+        message: "Gmail request failed.",
+        details: err?.message || "Unable to list threads.",
       });
     }
 
@@ -430,15 +415,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       metas = await fetchThreadMetas(accessToken, ids, accountEmail);
     } catch (err: any) {
       log("thread-meta-failed", { message: err?.message });
-      return respond(500, {
+      return respond(502, {
         ok: false,
-        code: "SYNC_FAILED",
-        message: "Sync failed",
-        detail: err?.message || "Unable to load thread metadata",
+        code: "GMAIL_UPSTREAM_ERROR",
+        message: "Gmail request failed.",
+        details: err?.message || "Unable to load thread metadata.",
       });
     }
 
-    return res.status(200).json({
+    return respond(200, {
       ok: true,
       connected: true,
       email: google?.email || null,
@@ -452,23 +437,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         capped: ids.length >= MAX_THREAD_CAP,
         primaryOnly: true,
       },
-      requestId,
     });
   } catch (e: any) {
-    const errorName = e?.name || "Error";
-    const errorMessage = typeof e?.message === "string" ? e.message : "Unknown error";
     log("sync-failed", {
-      errorName,
-      errorMessage,
-      stack: typeof e?.stack === "string" ? e.stack.split("\n")[0]?.trim() : undefined,
+      errorName: e?.name || "Error",
+      errorMessage: e?.message || "Unknown error",
     });
-    console.error("[gmail-threads]", { requestId, code: "SYNC_FAILED", errorName });
     return respond(500, {
       ok: false,
-      code: "SYNC_FAILED",
-      message: "Sync failed",
-      errorName,
-      errorMessage,
+      code: "SERVER_ERROR",
+      message: "Unexpected error.",
+      details: e?.message || "Unknown error",
     });
   }
 }

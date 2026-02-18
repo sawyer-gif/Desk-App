@@ -1,12 +1,5 @@
 .env.local
-dist
-node_modules
-.env.local
+.env*.local
 dist
 node_modules
 .vercel
-.env*.local
-
-data/signals.jsonl
-data/state/
-scopefirst/
