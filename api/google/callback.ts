@@ -8,6 +8,12 @@ const STATE_COOKIE_NAME = "desk_oauth_state";
 const REFRESH_COOKIE_NAME = "desk_google_refresh";
 const SESSION_COOKIE_KEYS = ["__session", "__clerk_session"];
 
+type JsonPayload = { error: string } | { ok: true };
+
+function sendJson(res: VercelResponse, status: number, payload: JsonPayload) {
+  res.status(status).setHeader("Content-Type", "application/json").send(JSON.stringify(payload));
+}
+
 function requireEnv(name: string) {
   const v = process.env[name];
   if (!v) throw new Error(`Missing env var: ${name}`);
@@ -92,26 +98,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const state = String(req.query.state || "");
 
     if (!code || !state) {
-      res.status(400).json({ error: "Missing code/state" });
+      sendJson(res, 400, { error: "Missing code/state" });
       return;
     }
 
     const stateCookie = readCookie(req.headers.cookie, STATE_COOKIE_NAME);
     if (!stateCookie || stateCookie !== state) {
-      res.status(400).json({ error: "Invalid OAuth state" });
+      sendJson(res, 400, { error: "Invalid OAuth state" });
       return;
     }
 
     const payload = verifyState(state);
     const stateUserId = payload.split(":")[0];
     if (!stateUserId) {
-      res.status(400).json({ error: "Invalid state payload" });
+      sendJson(res, 400, { error: "Invalid state payload" });
       return;
     }
 
     const sessionToken = readSessionToken(req.headers.cookie);
     if (!sessionToken) {
-      res.status(401).json({ error: "Missing session token" });
+      sendJson(res, 401, { error: "Missing session token" });
       return;
     }
 
@@ -121,7 +127,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const userId = verified?.sub;
     if (!userId || userId !== stateUserId) {
-      res.status(401).json({ error: "Session mismatch" });
+      sendJson(res, 401, { error: "Session mismatch" });
       return;
     }
 
@@ -158,6 +164,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.redirect(302, "/?connected=1");
   } catch (e: any) {
     console.error("[Desk][oauth-callback]", e);
-    res.status(500).json({ error: e?.message || "OAuth callback error" });
+    sendJson(res, 500, { error: e?.message || "OAuth callback error" });
   }
 }
