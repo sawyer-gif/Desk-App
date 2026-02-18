@@ -92,19 +92,24 @@ const normalizeThreads = (threads: any[]): Thread[] => {
   });
 };
 
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export const Header: React.FC = () => {
   const { state, dispatch } = useAppState();
   const { getToken } = useAuth();
 
   const refreshStatus = React.useCallback(async () => {
     try {
-      const res = await fetch(`/api/google/status?ts=${Date.now()}`, { cache: 'no-store' });
+      const res = await fetch(`/api/google/status?ts=${Date.now()}`, {
+        cache: 'no-store',
+        credentials: 'include',
+      });
       if (!res.ok) throw new Error('status failed');
       const data = await res.json();
       dispatch({ type: 'SET_GOOGLE_STATUS', payload: data?.connected ? 'CONNECTED' : 'NOT_CONNECTED' });
     } catch (err) {
-      dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'NOT_CONNECTED' });
       console.error('[Desk] status check failed', err);
+      dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'NOT_CONNECTED' });
     }
   }, [dispatch]);
 
@@ -124,19 +129,17 @@ export const Header: React.FC = () => {
   }, [refreshStatus]);
 
   const handleSync = async (rangeOverride?: DateRange) => {
-    if (state.isSyncing) return;
+    if (state.isSyncing || state.googleStatus !== 'CONNECTED') return;
 
     const activeRange = rangeOverride ?? state.dateRange ?? '30 Days';
     const rangeDays = rangeToDays(activeRange);
 
-    try {
-      dispatch({ type: "SET_SYNCING", payload: true });
-
+    const performSync = async (attempt: number): Promise<boolean> => {
       const token = await getToken();
       if (!token) {
         dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'AUTH_REQUIRED' });
         alert('Sign in to sync.');
-        return;
+        return false;
       }
 
       const params = new URLSearchParams({
@@ -145,50 +148,37 @@ export const Header: React.FC = () => {
       });
 
       const res = await fetch(`/api/google/gmail-threads?${params.toString()}`, {
-        method: "GET",
+        method: 'GET',
         headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store",
+        cache: 'no-store',
       });
 
-      const data = await res.json().catch(() => null);
+      const data = await res.json().catch(() => ({}));
 
       if (!res.ok || data?.ok === false) {
-        console.error('[Desk] Sync error', {
-          status: res.status,
-          code: data?.code,
-          message: data?.message,
-          requestId: data?.requestId,
-        });
-        const errorDetails = [`Sync failed: ${res.status}`, data?.code ? `code=${data.code}` : null, data?.requestId ? `requestId=${data.requestId}` : null].filter(Boolean).join(' ');
         if (res.status === 401 && data?.code === 'AUTH_REQUIRED') {
           dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'AUTH_REQUIRED' });
-          alert('Please connect Google to continue.');
-          return;
+          alert('Reconnect Google to sync.');
+          return false;
         }
         if (res.status === 403 && data?.code === 'GOOGLE_NOT_CONNECTED') {
           dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'NOT_CONNECTED' });
-          alert('Google connection required.');
-          return;
+          alert('Google account not connected.');
+          return false;
         }
-        if (res.status === 502 || data?.code === 'GMAIL_UPSTREAM_ERROR') {
-          alert('Temporary Gmail upstream error. Try again soon.');
-          return;
+        if ((res.status === 502 || data?.code === 'GMAIL_UPSTREAM_ERROR') && attempt < 2) {
+          await delay(attempt === 0 ? 500 : 1500);
+          return performSync(attempt + 1);
         }
-        alert(errorDetails);
-        return;
-        alert(`Sync failed: ${res.status} (${data?.code || 'UNKNOWN'}). See console for details.`);
-        return;
+        const details = data?.message || data?.error || `Sync failed (${res.status}).`;
+        alert(details);
+        return false;
       }
 
       const normalizedThreads = normalizeThreads(data?.threads ?? []);
-
-      dispatch({ type: "SET_THREADS", payload: normalizedThreads });
-      dispatch({ type: "PERFORM_SYNC" });
-      dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'CONNECTED' });
-      dispatch({
-        type: "SET_LAST_SYNC_TIME",
-        payload: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      });
+      dispatch({ type: 'SET_THREADS', payload: normalizedThreads });
+      dispatch({ type: 'PERFORM_SYNC' });
+      dispatch({ type: 'SET_LAST_SYNC_TIME', payload: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
       dispatch({
         type: 'SET_SYNC_META',
         payload: {
@@ -203,14 +193,21 @@ export const Header: React.FC = () => {
           lastUpdated: new Date().toISOString(),
         },
       });
-    } catch (err: any) {
+      dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'CONNECTED' });
+      return true;
+    };
+
+    dispatch({ type: 'SET_SYNCING', payload: true });
+    try {
+      await performSync(0);
+    } catch (err) {
       console.error(err);
-      alert(err?.message || "Sync failed. Try again.");
+      alert(err?.message || 'Sync failed. Try again.');
     } finally {
-      dispatch({ type: "SET_SYNCING", payload: false });
+      dispatch({ type: 'SET_SYNCING', payload: false });
+      refreshStatus();
     }
   };
-
 
   const handleLogout = () => {
     dispatch({ type: 'LOGOUT' });

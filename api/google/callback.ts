@@ -1,11 +1,12 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import crypto from "crypto";
-import { createClerkClient } from "@clerk/backend";
+import { createClerkClient, verifyToken } from "@clerk/backend";
 
 export const runtime = "nodejs";
 
 const STATE_COOKIE_NAME = "desk_oauth_state";
 const REFRESH_COOKIE_NAME = "desk_google_refresh";
+const SESSION_COOKIE_KEYS = ["__session", "__clerk_session"];
 
 function requireEnv(name: string) {
   const v = process.env[name];
@@ -21,7 +22,7 @@ function verifyState(state: string) {
   const payload = parts.join(".");
   const expected = crypto.createHmac("sha256", secret).update(payload).digest("hex");
   if (sig !== expected) throw new Error("Invalid state signature");
-  return payload; // userId:timestamp
+  return payload;
 }
 
 function readCookie(header: string | undefined, name: string) {
@@ -36,12 +37,26 @@ function readCookie(header: string | undefined, name: string) {
   return null;
 }
 
+function readSessionToken(header: string | undefined) {
+  if (!header) return null;
+  const parts = header.split(";");
+  for (const rawPart of parts) {
+    const part = rawPart.trim();
+    for (const key of SESSION_COOKIE_KEYS) {
+      if (part.startsWith(`${key}=`)) {
+        return decodeURIComponent(part.slice(key.length + 1));
+      }
+    }
+  }
+  return null;
+}
+
 async function exchangeCodeForTokens(code: string) {
   const body = new URLSearchParams({
     code,
     client_id: requireEnv("GOOGLE_CLIENT_ID"),
     client_secret: requireEnv("GOOGLE_CLIENT_SECRET"),
-    redirect_uri: requireEnv("GOOGLE_REDIRECT_URI"),
+    redirect_uri: process.env.GOOGLE_REDIRECT_URI || "https://desk-app-ivory.vercel.app/api/google/callback",
     grant_type: "authorization_code",
   });
 
@@ -76,14 +91,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const code = String(req.query.code || "");
     const state = String(req.query.state || "");
 
-    if (!code || !state) return res.status(400).send("Missing code/state");
+    if (!code || !state) {
+      res.status(400).json({ error: "Missing code/state" });
+      return;
+    }
 
     const stateCookie = readCookie(req.headers.cookie, STATE_COOKIE_NAME);
-    if (!stateCookie || stateCookie !== state) return res.status(400).send("Invalid OAuth state");
+    if (!stateCookie || stateCookie !== state) {
+      res.status(400).json({ error: "Invalid OAuth state" });
+      return;
+    }
 
     const payload = verifyState(state);
-    const userId = payload.split(":")[0];
-    if (!userId) return res.status(400).send("Invalid state payload");
+    const stateUserId = payload.split(":")[0];
+    if (!stateUserId) {
+      res.status(400).json({ error: "Invalid state payload" });
+      return;
+    }
+
+    const sessionToken = readSessionToken(req.headers.cookie);
+    if (!sessionToken) {
+      res.status(401).json({ error: "Missing session token" });
+      return;
+    }
+
+    const verified = await verifyToken(sessionToken, {
+      secretKey: requireEnv("CLERK_SECRET_KEY"),
+    });
+
+    const userId = verified?.sub;
+    if (!userId || userId !== stateUserId) {
+      res.status(401).json({ error: "Session mismatch" });
+      return;
+    }
 
     const tokens = await exchangeCodeForTokens(code);
     const profile = await fetchGmailProfile(tokens.access_token);
@@ -115,10 +155,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     res.setHeader("Set-Cookie", cookies);
-
-    return res.redirect(302, "/?connected=1");
+    res.redirect(302, "/?connected=1");
   } catch (e: any) {
     console.error("[Desk][oauth-callback]", e);
-    return res.status(500).send(e?.message || "OAuth callback error");
+    res.status(500).json({ error: e?.message || "OAuth callback error" });
   }
 }

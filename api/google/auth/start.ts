@@ -36,13 +36,13 @@ function readSessionToken(header: string | undefined) {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     if (req.method !== "GET") {
-      res.status(405).send("Method not allowed");
+      res.status(405).json({ error: "Method not allowed" });
       return;
     }
 
     const sessionToken = readSessionToken(req.headers.cookie);
     if (!sessionToken) {
-      res.status(401).send("Missing session token");
+      res.status(401).json({ error: "Missing session token" });
       return;
     }
 
@@ -52,12 +52,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const userId = verified?.sub;
     if (!userId) {
-      res.status(401).send("Invalid session token");
+      res.status(401).json({ error: "Invalid session token" });
       return;
     }
 
     const clientId = requireEnv("GOOGLE_CLIENT_ID");
-    const redirectUri = requireEnv("GOOGLE_REDIRECT_URI");
+    const redirectUri = process.env.GOOGLE_REDIRECT_URI || "https://desk-app-ivory.vercel.app/api/google/callback";
 
     const rawState = `${userId}:${Date.now()}`;
     const signedState = signState(rawState);
@@ -88,6 +88,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(302).setHeader("Location", url).end();
   } catch (err: any) {
     console.error("[Desk][oauth-start]", err);
-    res.status(500).send(err?.message || "OAuth start error");
+    res.status(500).json({ error: err?.message || "OAuth start error" });
   }
 }
