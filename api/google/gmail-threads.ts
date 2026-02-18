@@ -2,6 +2,8 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 import { createClerkClient, verifyToken } from "@clerk/backend";
 
+export const runtime = "nodejs";
+
 type GmailThreadListResponse = {
   threads?: { id: string }[];
   nextPageToken?: string;
