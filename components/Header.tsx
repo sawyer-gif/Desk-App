@@ -286,6 +286,10 @@ export const Header: React.FC = () => {
         <div className="w-px h-6 bg-black/5 dark:bg-white/5 mx-2" />
         {showGoogleConnect && <ConnectGoogleButton />}
 
+        <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-desk-text-secondary-light dark:text-desk-text-secondary-dark">
+          {state.googleStatus === 'CONNECTED' ? 'Google Connected' : 'Google Disconnected'}
+        </div>
+
         <button
           onClick={() => handleSync()}
           disabled={syncDisabled}
