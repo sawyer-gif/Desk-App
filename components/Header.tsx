@@ -96,23 +96,32 @@ export const Header: React.FC = () => {
   const { state, dispatch } = useAppState();
   const { getToken } = useAuth();
 
-  React.useEffect(() => {
-    const controller = new AbortController();
-    const loadStatus = async () => {
-      try {
-        const res = await fetch(`/api/google/status?ts=${Date.now()}`, { cache: 'no-store', signal: controller.signal });
-        if (!res.ok) throw new Error('status failed');
-        const data = await res.json();
-        dispatch({ type: 'SET_GOOGLE_STATUS', payload: data?.connected ? 'CONNECTED' : 'NOT_CONNECTED' });
-      } catch (err) {
-        if (!controller.signal.aborted) {
-          dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'NOT_CONNECTED' });
-        }
-      }
-    };
-    loadStatus();
-    return () => controller.abort();
+  const refreshStatus = React.useCallback(async () => {
+    try {
+      const res = await fetch(`/api/google/status?ts=${Date.now()}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error('status failed');
+      const data = await res.json();
+      dispatch({ type: 'SET_GOOGLE_STATUS', payload: data?.connected ? 'CONNECTED' : 'NOT_CONNECTED' });
+    } catch (err) {
+      dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'NOT_CONNECTED' });
+      console.error('[Desk] status check failed', err);
+    }
   }, [dispatch]);
+
+  React.useEffect(() => {
+    refreshStatus();
+  }, [refreshStatus]);
+
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('connected')) {
+      refreshStatus();
+      params.delete('connected');
+      const next = params.toString();
+      const nextUrl = next ? `${window.location.pathname}?${next}` : window.location.pathname;
+      window.history.replaceState({}, '', nextUrl);
+    }
+  }, [refreshStatus]);
 
   const handleSync = async (rangeOverride?: DateRange) => {
     if (state.isSyncing) return;
@@ -129,8 +138,6 @@ export const Header: React.FC = () => {
         alert('Sign in to sync.');
         return;
       }
-
-      dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'CONNECTING' });
 
       const params = new URLSearchParams({
         ts: Date.now().toString(),
@@ -152,8 +159,7 @@ export const Header: React.FC = () => {
           message: data?.message,
           requestId: data?.requestId,
         });
-        const isAuthError = res.status === 401 || res.status === 403;
-        const isUpstreamError = res.status === 502 || (data?.code === 'GMAIL_UPSTREAM_ERROR');
+        const errorDetails = [`Sync failed: ${res.status}`, data?.code ? `code=${data.code}` : null, data?.requestId ? `requestId=${data.requestId}` : null].filter(Boolean).join(' ');
         if (res.status === 401 && data?.code === 'AUTH_REQUIRED') {
           dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'AUTH_REQUIRED' });
           alert('Please connect Google to continue.');
@@ -165,9 +171,11 @@ export const Header: React.FC = () => {
           return;
         }
         if (res.status === 502 || data?.code === 'GMAIL_UPSTREAM_ERROR') {
-          alert(errorMessage);
+          alert('Temporary Gmail upstream error. Try again soon.');
           return;
         }
+        alert(errorDetails);
+        return;
         alert(`Sync failed: ${res.status} (${data?.code || 'UNKNOWN'}). See console for details.`);
         return;
       }
@@ -197,7 +205,6 @@ export const Header: React.FC = () => {
       });
     } catch (err: any) {
       console.error(err);
-      dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'NOT_CONNECTED' });
       alert(err?.message || "Sync failed. Try again.");
     } finally {
       dispatch({ type: "SET_SYNCING", payload: false });
@@ -284,11 +291,10 @@ export const Header: React.FC = () => {
         </button>
 
         <div className="w-px h-6 bg-black/5 dark:bg-white/5 mx-2" />
-        {showGoogleConnect && <ConnectGoogleButton />}
-
         <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-desk-text-secondary-light dark:text-desk-text-secondary-dark">
           {state.googleStatus === 'CONNECTED' ? 'Google Connected' : 'Google Disconnected'}
         </div>
+        {showGoogleConnect && <ConnectGoogleButton />}
 
         <button
           onClick={() => handleSync()}

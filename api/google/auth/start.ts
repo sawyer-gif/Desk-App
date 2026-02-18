@@ -1,9 +1,11 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import crypto from "crypto";
+import { verifyToken } from "@clerk/backend";
 
 export const runtime = "nodejs";
 
 const STATE_COOKIE_NAME = "desk_oauth_state";
+const SESSION_COOKIE_KEYS = ["__session", "__clerk_session"];
 
 function requireEnv(name: string) {
   const value = process.env[name];
@@ -17,18 +19,53 @@ function signState(payload: string) {
   return `${payload}.${sig}`;
 }
 
-export default async function handler(_req: VercelRequest, res: VercelResponse) {
+function readSessionToken(header: string | undefined) {
+  if (!header) return null;
+  const parts = header.split(";");
+  for (const rawPart of parts) {
+    const part = rawPart.trim();
+    for (const key of SESSION_COOKIE_KEYS) {
+      if (part.startsWith(`${key}=`)) {
+        return decodeURIComponent(part.slice(key.length + 1));
+      }
+    }
+  }
+  return null;
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
-    const statePayload = crypto.randomBytes(16).toString("hex");
-    const signedState = signState(statePayload);
+    if (req.method !== "GET") {
+      res.status(405).send("Method not allowed");
+      return;
+    }
+
+    const sessionToken = readSessionToken(req.headers.cookie);
+    if (!sessionToken) {
+      res.status(401).send("Missing session token");
+      return;
+    }
+
+    const verified = await verifyToken(sessionToken, {
+      secretKey: requireEnv("CLERK_SECRET_KEY"),
+    });
+
+    const userId = verified?.sub;
+    if (!userId) {
+      res.status(401).send("Invalid session token");
+      return;
+    }
+
+    const clientId = requireEnv("GOOGLE_CLIENT_ID");
+    const redirectUri = requireEnv("GOOGLE_REDIRECT_URI");
+
+    const rawState = `${userId}:${Date.now()}`;
+    const signedState = signState(rawState);
 
     res.setHeader(
       "Set-Cookie",
       `${STATE_COOKIE_NAME}=${signedState}; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=600`
     );
-
-    const clientId = requireEnv("GOOGLE_CLIENT_ID");
-    const redirectUri = requireEnv("GOOGLE_REDIRECT_URI");
 
     const scope = encodeURIComponent(
       [

@@ -2,6 +2,11 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import crypto from "crypto";
 import { createClerkClient } from "@clerk/backend";
 
+export const runtime = "nodejs";
+
+const STATE_COOKIE_NAME = "desk_oauth_state";
+const REFRESH_COOKIE_NAME = "desk_google_refresh";
+
 function requireEnv(name: string) {
   const v = process.env[name];
   if (!v) throw new Error(`Missing env var: ${name}`);
@@ -17,6 +22,18 @@ function verifyState(state: string) {
   const expected = crypto.createHmac("sha256", secret).update(payload).digest("hex");
   if (sig !== expected) throw new Error("Invalid state signature");
   return payload; // userId:timestamp
+}
+
+function readCookie(header: string | undefined, name: string) {
+  if (!header) return null;
+  const parts = header.split(";");
+  for (const rawPart of parts) {
+    const part = rawPart.trim();
+    if (part.startsWith(`${name}=`)) {
+      return decodeURIComponent(part.slice(name.length + 1));
+    }
+  }
+  return null;
 }
 
 async function exchangeCodeForTokens(code: string) {
@@ -61,18 +78,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!code || !state) return res.status(400).send("Missing code/state");
 
-    const payload = verifyState(state); // "userId:timestamp"
+    const stateCookie = readCookie(req.headers.cookie, STATE_COOKIE_NAME);
+    if (!stateCookie || stateCookie !== state) return res.status(400).send("Invalid OAuth state");
+
+    const payload = verifyState(state);
     const userId = payload.split(":")[0];
     if (!userId) return res.status(400).send("Invalid state payload");
 
     const tokens = await exchangeCodeForTokens(code);
-
-    // Refresh token only arrives the FIRST time (or when prompt=consent)
-    if (!tokens.refresh_token) {
-      // Still save that "connected" happened, but warn.
-      // Usually means user previously connected and Google isn't re-issuing refresh token.
-    }
-
     const profile = await fetchGmailProfile(tokens.access_token);
 
     const clerk = createClerkClient({ secretKey: requireEnv("CLERK_SECRET_KEY") });
@@ -91,9 +104,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     });
 
-    // Redirect user back to your app
-    return res.redirect(302, "https://desk-app-ivory.vercel.app/");
+    const cookies = [
+      `${STATE_COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax; Secure`,
+    ];
+
+    if (tokens.refresh_token) {
+      cookies.push(
+        `${REFRESH_COOKIE_NAME}=${encodeURIComponent(tokens.refresh_token)}; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=${60 * 60 * 24 * 30}`
+      );
+    }
+
+    res.setHeader("Set-Cookie", cookies);
+
+    return res.redirect(302, "/?connected=1");
   } catch (e: any) {
+    console.error("[Desk][oauth-callback]", e);
     return res.status(500).send(e?.message || "OAuth callback error");
   }
 }

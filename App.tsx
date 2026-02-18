@@ -137,45 +137,6 @@ const AppContent: React.FC = () => {
   );
 };
 
-const GoogleCallback: React.FC = () => {
-  const { dispatch } = useAppState();
-
-  useEffect(() => {
-    const controller = new AbortController();
-    const refreshStatus = async () => {
-      try {
-        const res = await fetch(`/api/google/status?ts=${Date.now()}`, { cache: 'no-store', signal: controller.signal });
-        if (res.ok) {
-          const data = await res.json();
-          dispatch({ type: 'SET_GOOGLE_STATUS', payload: data?.connected ? 'CONNECTED' : 'NOT_CONNECTED' });
-        } else {
-          console.error('[Desk] status refresh failed', await res.text());
-          dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'NOT_CONNECTED' });
-        }
-      } catch (err) {
-        if (!controller.signal.aborted) {
-          console.error('[Desk] status refresh error', err);
-          dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'NOT_CONNECTED' });
-        }
-      } finally {
-        window.location.replace('/');
-      }
-    };
-    refreshStatus();
-    return () => controller.abort();
-  }, [dispatch]);
-
-  return (
-    <div className="flex h-screen items-center justify-center bg-desk-bg-light dark:bg-desk-bg-dark text-center p-8">
-      <div>
-        <p className="text-sm font-semibold uppercase tracking-[0.3em] text-gray-400 mb-3">Google OAuth</p>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Connecting your account…</h1>
-        <p className="text-gray-500 dark:text-gray-400 text-sm">You will be redirected back to Desk automatically.</p>
-      </div>
-    </div>
-  );
-};
-
 const NotFound: React.FC = () => {
   return (
     <div className="flex h-screen items-center justify-center bg-desk-bg-light dark:bg-desk-bg-dark text-center p-8">
@@ -194,8 +155,7 @@ const AppRoutes: React.FC = () => (
   <Routes>
     <Route path="/" element={<AppContent />} />
     <Route path="/threads/:threadId" element={<AppContent />} />
-    <Route path="/google/callback" element={<GoogleCallback />} />
-    <Route path="*" element={<NotFound />} />
+        <Route path="*" element={<NotFound />} />
   </Routes>
 );
 
