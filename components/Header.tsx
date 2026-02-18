@@ -2,6 +2,7 @@ import React from 'react';
 import { useAuth } from "@clerk/clerk-react";
 import { useAppState } from '../store';
 import { Search, RefreshCw, ChevronLeft, Moon, Sun, LogOut } from 'lucide-react';
+import ConnectGoogleButton from './ConnectGoogleButton';
 import { Bucket, Priority, Thread, DateRange } from '../types';
 
 const parseEmailAddress = (raw: string) => {
@@ -106,9 +107,12 @@ export const Header: React.FC = () => {
 
       const token = await getToken();
       if (!token) {
+        dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'AUTH_REQUIRED' });
         alert('Sign in to sync.');
         return;
       }
+
+      dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'CONNECTING' });
 
       const params = new URLSearchParams({
         ts: Date.now().toString(),
@@ -131,11 +135,11 @@ export const Header: React.FC = () => {
           requestId: data?.requestId,
         });
         if (res.status === 401 && data?.code === 'AUTH_REQUIRED') {
-          alert('Please sign in to sync.');
+          dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'AUTH_REQUIRED' });
           return;
         }
         if (res.status === 403 && data?.code === 'GOOGLE_NOT_CONNECTED') {
-          alert('Connect Google to sync.');
+          dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'NOT_CONNECTED' });
           return;
         }
         alert(`Sync failed: ${res.status} (${data?.code || 'UNKNOWN'}). See console for details.`);
@@ -146,6 +150,7 @@ export const Header: React.FC = () => {
 
       dispatch({ type: "SET_THREADS", payload: normalizedThreads });
       dispatch({ type: "PERFORM_SYNC" });
+      dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'CONNECTED' });
       dispatch({
         type: "SET_LAST_SYNC_TIME",
         payload: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
@@ -179,9 +184,12 @@ export const Header: React.FC = () => {
 const connectGoogle = async () => {
   try {
     const token = await getToken();
-
+    if (!token) {
+      alert('Sign in first.');
+      return;
+    }
+    dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'CONNECTING' });
     const res = await fetch("/api/google/google-start?ts=" + Date.now(), {
-
       method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -192,6 +200,7 @@ const connectGoogle = async () => {
     if (!res.ok) {
       const txt = await res.text();
       alert("Google connect failed: " + txt);
+      dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'NOT_CONNECTED' });
       return;
     }
 
@@ -200,6 +209,7 @@ const connectGoogle = async () => {
 
   } catch (err) {
     console.error(err);
+    dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'NOT_CONNECTED' });
     alert("Google connect error");
   }
 };
@@ -212,6 +222,7 @@ const connectGoogle = async () => {
   };
 
   const isDashboard = state.currentView.type === 'DASHBOARD';
+  const showGoogleConnect = state.googleStatus === 'AUTH_REQUIRED' || state.googleStatus === 'NOT_CONNECTED';
 
   return (
     <header className="glass sticky top-0 z-50 px-8 py-4 flex items-center justify-between dark:bg-desk-surface-dark/80 dark:border-white/5">
@@ -277,12 +288,9 @@ const connectGoogle = async () => {
         </button>
 
         <div className="w-px h-6 bg-black/5 dark:bg-white/5 mx-2" />
-        <button
-          onClick={connectGoogle}
-          className="px-3 py-1.5 text-[12px] font-bold rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-all"
-      >
-          Connect Google
-        </button>
+        {showGoogleConnect && (
+          <ConnectGoogleButton status={state.googleStatus} onConnect={connectGoogle} />
+        )}
 
         <button
           onClick={() => handleSync()}

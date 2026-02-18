@@ -101,6 +101,7 @@ const initialState: AppState = {
   isDetailPanelCollapsed: readBoolean(DETAIL_COLLAPSE_KEY, false),
   syncMeta: null,
   actionabilityPrefs: loadActionabilityPrefs(),
+  googleStatus: 'UNKNOWN',
 };
 
 function computeActionableMeta(thread: Thread) {
@@ -399,6 +400,11 @@ function reducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         syncMeta: action.payload,
+      };
+    case 'SET_GOOGLE_STATUS':
+      return {
+        ...state,
+        googleStatus: action.payload,
       };
     case 'TOGGLE_THREAD_MUTE': {
       const threadId = action.payload.threadId;

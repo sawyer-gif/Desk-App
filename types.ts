@@ -118,6 +118,9 @@ export interface ActionabilityPrefs {
   blocklistDomains: string[];
 }
 
+
+export type GoogleStatus = 'UNKNOWN' | 'CONNECTED' | 'AUTH_REQUIRED' | 'NOT_CONNECTED' | 'CONNECTING';
+
 export interface AppState {
   isAuthenticated: boolean;
   threads: Thread[];
@@ -136,7 +139,9 @@ export interface AppState {
   isDetailPanelCollapsed: boolean;
   syncMeta: SyncMeta | null;
   actionabilityPrefs: ActionabilityPrefs;
+  googleStatus: GoogleStatus;
 }
+
 
 export type Action =
   | { type: 'SET_THREADS'; payload: Thread[] }
@@ -169,7 +174,8 @@ export type Action =
   | { type: 'ADD_ALLOWLIST_DOMAIN'; payload: string }
   | { type: 'REMOVE_ALLOWLIST_DOMAIN'; payload: string }
   | { type: 'ADD_BLOCKLIST_DOMAIN'; payload: string }
-  | { type: 'REMOVE_BLOCKLIST_DOMAIN'; payload: string };
+  | { type: 'REMOVE_BLOCKLIST_DOMAIN'; payload: string }
+  | { type: 'SET_GOOGLE_STATUS'; payload: GoogleStatus };
 
 
 
