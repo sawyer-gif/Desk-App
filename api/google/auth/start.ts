@@ -1,4 +1,3 @@
-
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import crypto from "crypto";
 
@@ -18,13 +17,8 @@ function signState(payload: string) {
   return `${payload}.${sig}`;
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(_req: VercelRequest, res: VercelResponse) {
   try {
-    if (req.method !== "GET") {
-      res.status(405).send("Method not allowed");
-      return;
-    }
-
     const statePayload = crypto.randomBytes(16).toString("hex");
     const signedState = signState(statePayload);
 
