@@ -134,12 +134,19 @@ export const Header: React.FC = () => {
           message: data?.message,
           requestId: data?.requestId,
         });
+        const errorMessage = [`Sync failed: ${res.status}`, data?.code ? `code=${data.code}` : null, data?.requestId ? `requestId=${data.requestId}` : null].filter(Boolean).join(' ');
         if (res.status === 401 && data?.code === 'AUTH_REQUIRED') {
           dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'AUTH_REQUIRED' });
+          alert('Please connect Google to continue.');
           return;
         }
         if (res.status === 403 && data?.code === 'GOOGLE_NOT_CONNECTED') {
           dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'NOT_CONNECTED' });
+          alert('Google connection required.');
+          return;
+        }
+        if (res.status === 502 || data?.code === 'GMAIL_UPSTREAM_ERROR') {
+          alert(errorMessage);
           return;
         }
         alert(`Sync failed: ${res.status} (${data?.code || 'UNKNOWN'}). See console for details.`);
@@ -171,6 +178,7 @@ export const Header: React.FC = () => {
       });
     } catch (err: any) {
       console.error(err);
+      dispatch({ type: 'SET_GOOGLE_STATUS', payload: 'NOT_CONNECTED' });
       alert(err?.message || "Sync failed. Try again.");
     } finally {
       dispatch({ type: "SET_SYNCING", payload: false });
@@ -191,6 +199,7 @@ export const Header: React.FC = () => {
 
   const isDashboard = state.currentView.type === 'DASHBOARD';
   const showGoogleConnect = state.googleStatus !== 'CONNECTED';
+  const syncDisabled = state.isSyncing || state.googleStatus !== 'CONNECTED';
 
   return (
     <header className="glass sticky top-0 z-50 px-8 py-4 flex items-center justify-between dark:bg-desk-surface-dark/80 dark:border-white/5">
@@ -260,7 +269,7 @@ export const Header: React.FC = () => {
 
         <button
           onClick={() => handleSync()}
-          disabled={state.isSyncing}
+          disabled={syncDisabled}
           className="bg-desk-text-primary-light dark:bg-desk-text-primary-dark dark:text-desk-surface-dark text-desk-surface-light px-4 py-2 rounded-xl text-[12px] font-bold hover:opacity-90 active:scale-95 transition-all flex items-center gap-2 disabled:bg-desk-text-secondary-light/30"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${state.isSyncing ? 'animate-spin' : ''}`} />

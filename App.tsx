@@ -137,6 +137,27 @@ const AppContent: React.FC = () => {
   );
 };
 
+const GoogleCallback: React.FC = () => {
+  const navigateBack = React.useCallback(() => {
+    window.location.replace('/');
+  }, []);
+
+  useEffect(() => {
+    const id = setTimeout(navigateBack, 1200);
+    return () => clearTimeout(id);
+  }, [navigateBack]);
+
+  return (
+    <div className="flex h-screen items-center justify-center bg-desk-bg-light dark:bg-desk-bg-dark text-center p-8">
+      <div>
+        <p className="text-sm font-semibold uppercase tracking-[0.3em] text-gray-400 mb-3">Google OAuth</p>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Connecting your account…</h1>
+        <p className="text-gray-500 dark:text-gray-400 text-sm">You will be redirected back to Desk automatically.</p>
+      </div>
+    </div>
+  );
+};
+
 const NotFound: React.FC = () => {
   return (
     <div className="flex h-screen items-center justify-center bg-desk-bg-light dark:bg-desk-bg-dark text-center p-8">
@@ -155,6 +176,7 @@ const AppRoutes: React.FC = () => (
   <Routes>
     <Route path="/" element={<AppContent />} />
     <Route path="/threads/:threadId" element={<AppContent />} />
+    <Route path="/google/callback" element={<GoogleCallback />} />
     <Route path="*" element={<NotFound />} />
   </Routes>
 );
