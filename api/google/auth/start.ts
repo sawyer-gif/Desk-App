@@ -2,11 +2,28 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import crypto from "crypto";
 import { verifyToken } from "@clerk/backend";
 
+export const runtime = "nodejs";
+
+const SESSION_COOKIE_KEYS = ["__session", "__clerk_session"];
 
 function requireEnv(name: string) {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env var: ${name}`);
-  return v;
+  const value = process.env[name];
+  if (!value) throw new Error(`Missing env var: ${name}`);
+  return value;
+}
+
+function readSessionToken(cookieHeader: string | undefined) {
+  if (!cookieHeader) return null;
+  const parts = cookieHeader.split(";");
+  for (const rawPart of parts) {
+    const part = rawPart.trim();
+    for (const key of SESSION_COOKIE_KEYS) {
+      if (part.startsWith(`${key}=`)) {
+        return decodeURIComponent(part.slice(key.length + 1));
+      }
+    }
+  }
+  return null;
 }
 
 function signState(payload: string) {
@@ -17,24 +34,30 @@ function signState(payload: string) {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
-    if (req.method !== "GET") return res.status(405).send("Method not allowed");
+    if (req.method !== "GET") {
+      res.status(405).send("Method not allowed");
+      return;
+    }
 
-    const authHeader = req.headers.authorization || "";
-    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
-    if (!token) return res.status(401).json({ error: "Missing Authorization Bearer token" });
+    const sessionToken = readSessionToken(req.headers.cookie);
+    if (!sessionToken) {
+      res.status(401).send("Missing session token");
+      return;
+    }
 
-    // Verify Clerk session token
-    const verified = await verifyToken(token, {
+    const verified = await verifyToken(sessionToken, {
       secretKey: requireEnv("CLERK_SECRET_KEY"),
     });
 
-    const userId = verified.sub;
-    if (!userId) return res.status(401).json({ error: "No userId in token" });
+    const userId = verified?.sub;
+    if (!userId) {
+      res.status(401).send("Invalid session token");
+      return;
+    }
 
     const clientId = requireEnv("GOOGLE_CLIENT_ID");
     const redirectUri = requireEnv("GOOGLE_REDIRECT_URI");
 
-    // State = userId + timestamp, signed to prevent tampering
     const rawState = `${userId}:${Date.now()}`;
     const state = signState(rawState);
 
@@ -56,8 +79,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       `&include_granted_scopes=false` +
       `&state=${encodeURIComponent(state)}`;
 
-    return res.status(200).json({ url });
-  } catch (e: any) {
-    return res.status(500).json({ error: e?.message || "Server error" });
+    res.status(302).setHeader("Location", url).end();
+  } catch (err: any) {
+    console.error("[Desk][oauth-start]", err);
+    res.status(500).send(err?.message || "OAuth start error");
   }
 }
