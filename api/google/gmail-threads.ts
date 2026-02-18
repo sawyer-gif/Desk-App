@@ -247,6 +247,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     hasOAuthStateSecret: Boolean(process.env.OAUTH_STATE_SECRET),
     hasRedirectUri: Boolean(process.env.GOOGLE_REDIRECT_URI),
   };
+  let signedIn = false;
+  let googleConnected = false;
 
   const respond = (
     status: number,
@@ -264,6 +266,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.log(`[Desk][gmail-threads][${requestId}] ${message}`, extra || {});
 
   try {
+    log("request-start", { method: req.method, signedIn, googleConnected });
     if (req.method !== "GET") {
       return respond(405, {
         ok: false,
@@ -280,6 +283,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const token = authHeaderRaw.startsWith("Bearer ") ? authHeaderRaw.slice(7) : "";
 
     if (!token) {
+      log("auth-header-missing", { signedIn, googleConnected });
       return respond(401, {
         ok: false,
         code: "AUTH_REQUIRED",
@@ -313,12 +317,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const userId = verified?.sub;
     if (!userId) {
+      log("auth-missing-user", { signedIn, googleConnected });
       return respond(401, {
         ok: false,
         code: "AUTH_REQUIRED",
         message: "Sign in to sync.",
       });
     }
+
+    signedIn = true;
+    log("auth-ok", { signedIn, googleConnected });
 
     const clerk = createClerkClient({ secretKey: clerkSecret });
     const user = await clerk.users.getUser(userId);
@@ -327,12 +335,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const refreshToken = google?.refresh_token;
 
     if (!google?.connected || !refreshToken) {
+      log("google-not-connected", { signedIn, googleConnected });
       return respond(403, {
         ok: false,
         code: "GOOGLE_NOT_CONNECTED",
         message: "Connect Google to sync.",
       });
     }
+
+    googleConnected = true;
 
     let accessToken: string;
     try {
@@ -419,6 +430,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    log("response-200", { signedIn, googleConnected, threads: metas.length });
     return respond(200, {
       ok: true,
       connected: true,
@@ -435,15 +447,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     });
   } catch (e: any) {
-    log("sync-failed", {
-      errorName: e?.name || "Error",
-      errorMessage: e?.message || "Unknown error",
-    });
-    return respond(500, {
+    console.error("[gmail-threads] unhandled", e);
+    return res.status(500).json({
       ok: false,
-      code: "SERVER_ERROR",
-      message: "Unexpected error.",
-      details: e?.message || "Unknown error",
+      code: "INTERNAL_ERROR",
+      message: "gmail-threads crashed",
+      requestId,
+      debug: {
+        runtime: runtimeMode,
+        ...envFlags,
+      },
     });
   }
 }
